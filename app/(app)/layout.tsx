@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/shell";
 import { getSessionProfile } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AppLayout({ children }: { children: ReactNode }) {
   try {
     const { profile } = await getSessionProfile();

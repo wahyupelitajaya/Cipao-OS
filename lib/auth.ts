@@ -44,9 +44,8 @@ export async function getSessionProfile() {
       const { data } = await supabase.auth.getSession();
       session = data.session;
     } catch (err) {
-      if (isSessionInvalidError(err)) {
-        redirect("/auth/logout");
-      }
+      // Instead of forcing a redirect to /auth/logout which clears everything on soft failures,
+      // just treat it as no session and let the UI/Layout decide what to do.
       return { session: null, profile: null };
     }
 
