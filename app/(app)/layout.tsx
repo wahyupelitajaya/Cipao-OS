@@ -7,16 +7,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  try {
-    const { profile } = await getSessionProfile();
-    if (!profile) {
-      redirect("/login");
-    }
-    return <AppShell>{children}</AppShell>;
-  } catch (e) {
-    if (e && typeof e === "object" && "digest" in e && String((e as { digest?: string }).digest).startsWith("NEXT_REDIRECT")) {
-      throw e;
-    }
+  const { session, profile } = await getSessionProfile();
+
+  // Only redirect to login if there is genuinely NO session (user not logged in).
+  // If session exists but profile is null (DB timeout/rate limit), stay on the page —
+  // the user IS authenticated, just the profile query momentarily failed.
+  if (!session) {
     redirect("/login");
   }
+
+  return <AppShell>{children}</AppShell>;
 }

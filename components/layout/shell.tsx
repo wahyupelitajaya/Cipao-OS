@@ -4,7 +4,6 @@ import { ReactNode } from "react";
 import { GlobalCommand } from "@/components/ui/command";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { NavLinks } from "@/components/layout/nav-links";
-import { SessionRefresher } from "@/components/auth/session-refresher";
 import { getSessionProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
 import { getSearchData } from "@/lib/data/search";

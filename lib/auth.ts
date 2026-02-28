@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "./supabaseClient";
 import { AppError, ErrorCode } from "./errors";
 
@@ -10,69 +9,44 @@ export interface Profile {
   role: ProfileRole;
 }
 
-/** Error codes that indicate the session/token is invalid and user must re-login */
-const SESSION_INVALID_CODES = new Set([
-  "refresh_token_not_found",
-  "invalid_refresh_token",
-  "refresh_token_revoked",
-]);
-
-function isSessionInvalidError(err: unknown): boolean {
-  const code =
-    err && typeof err === "object" && "code" in err
-      ? (err as { code?: string }).code
-      : undefined;
-  return typeof code === "string" && SESSION_INVALID_CODES.has(code);
-}
-
-/** Next.js redirect() throws; jangan swallow agar redirect tetap jalan. */
-function isNextRedirect(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "digest" in err &&
-    String((err as { digest?: string }).digest).startsWith("NEXT_REDIRECT")
-  );
-}
-
+/**
+ * Safely get the current session and profile.
+ *
+ * IMPORTANT: This function NEVER throws. It always returns a result.
+ * - If the user is not logged in (no cookie / expired token): session=null, profile=null
+ * - If the user IS logged in but the profile query fails (DB error, rate limit, timeout):
+ *   session is returned but profile=null. The CALLER must check session to distinguish
+ *   "not logged in" from "logged in but profile fetch failed".
+ */
 export async function getSessionProfile() {
+  const supabase = await createSupabaseServerClient();
+
+  // 1. Read session from cookie — this does NOT make a network call to Supabase.
+  //    It simply reads the JWT from the cookie set by the proxy.
+  const { data, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError || !data.session?.user) {
+    // No valid session cookie → user is genuinely not logged in
+    return { session: null, profile: null };
+  }
+
+  const session = data.session;
+
+  // 2. We have a valid session. Now fetch the profile from DB.
+  //    If this fails (rate limit, timeout, etc.), we still return the session
+  //    so the caller knows the user IS authenticated — just the profile is missing.
   try {
-    const supabase = await createSupabaseServerClient();
-
-    let session: { user: { id: string } } | null = null;
-    try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error && isSessionInvalidError(error)) {
-        return { session: null, profile: null };
-      }
-      if (error) throw error;
-      session = data.session;
-    } catch (err) {
-      if (isSessionInvalidError(err)) {
-        return { session: null, profile: null };
-      }
-      // Re-throw generic network or rate limit errors
-      throw err;
-    }
-
-    if (!session?.user) return { session: null, profile: null };
-
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from("profiles")
       .select("id,email,role")
       .eq("id", session.user.id)
       .maybeSingle();
 
-    if (profileError) {
-      console.error("Failed to fetch profile due to DB error:", profileError);
-      throw new Error(`Database error fetching profile: ${profileError.message}`);
-    }
-
     return { session, profile: profile as Profile | null };
-  } catch (err) {
-    if (isNextRedirect(err)) throw err;
-    if (err instanceof Error) throw err; // propagate DB/Network errors to Next.js Error Boundary
-    return { session: null, profile: null };
+  } catch {
+    // DB error — user is authenticated but we can't fetch their profile right now.
+    // Return session so the caller knows NOT to redirect to login.
+    return { session, profile: null };
   }
 }
 
