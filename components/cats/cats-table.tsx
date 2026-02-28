@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { EditCatDialog } from "@/components/cats/edit-cat-dialog";
 import { Badge } from "@/components/ui/badge";
-import { bulkUpdateCats } from "@/app/actions/cats";
+import { bulkUpdateCats, deleteCat } from "@/app/actions/cats";
 import { getFriendlyMessage } from "@/lib/errors";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Tables } from "@/lib/types";
 
 type Cat = Tables<"cats">;
@@ -126,7 +127,10 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
   const [bulkLocation, setBulkLocation] = useState("");
   const [bulkBreedId, setBulkBreedId] = useState("");
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const breedsById = new Map(breeds.map((b) => [b.id, b]));
+  const catToDelete = confirmDeleteId ? cats.find((c) => c.id === confirmDeleteId) : null;
 
   const allIds = cats.map((c) => c.id);
   const allSelected =
@@ -176,6 +180,20 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
   const selectedCount = selectedIds.size;
   const canBulkSubmit =
     selectedCount > 0 && (bulkStatus || bulkLocation || bulkBreedId);
+
+  async function handleConfirmDelete() {
+    if (!confirmDeleteId) return;
+    setDeleteError(null);
+    try {
+      const formData = new FormData();
+      formData.set("id", confirmDeleteId);
+      await deleteCat(formData);
+      setConfirmDeleteId(null);
+      router.refresh();
+    } catch (err) {
+      setDeleteError(getFriendlyMessage(err));
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -350,7 +368,20 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
                     >
                       Open
                     </Link>
-                    {admin && <EditCatDialog cat={cat} breeds={breeds} />}
+                    {admin && (
+                      <>
+                        <EditCatDialog cat={cat} breeds={breeds} />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setConfirmDeleteId(cat.id)}
+                        >
+                          Hapus
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -358,6 +389,26 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
           </tbody>
         </table>
       </div>
+
+      {admin && (
+        <ConfirmDialog
+          open={confirmDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setConfirmDeleteId(null);
+              setDeleteError(null);
+            }
+          }}
+          title="Hapus kucing"
+          description={
+            catToDelete
+              ? `${deleteError ? `${deleteError}\n\n` : ""}Yakin ingin menghapus "${catToDelete.name}"? Semua data health, weight, dan grooming kucing ini akan ikut terhapus.`
+              : ""
+          }
+          confirmLabel="Hapus"
+          onConfirm={handleConfirmDelete}
+        />
+      )}
     </div>
   );
 }

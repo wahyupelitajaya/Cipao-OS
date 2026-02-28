@@ -17,6 +17,7 @@ import {
 import { addHealthLog, addWeightLog, addGroomingLog } from "@/app/actions/logs";
 import { acceptSuggestedStatus } from "@/app/actions/cats";
 import { EditCatDialog } from "@/components/cats/edit-cat-dialog";
+import { DeleteCatButton } from "@/components/cats/delete-cat-button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -198,7 +199,12 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
               </Badge>
             )}
             <Badge variant={statusVariant}>{suggestionLabel}</Badge>
-            {admin && <EditCatDialog cat={c} breeds={(breeds as Tables<"cat_breeds">[]) ?? []} />}
+            {admin && (
+              <>
+                <EditCatDialog cat={c} breeds={(breeds as Tables<"cat_breeds">[]) ?? []} />
+                <DeleteCatButton catId={c.id} catName={c.name} />
+              </>
+            )}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-0 text-sm text-muted-foreground">
             {c.location && (

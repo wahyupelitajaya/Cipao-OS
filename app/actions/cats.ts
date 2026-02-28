@@ -33,8 +33,6 @@ export async function createCat(formData: FormData) {
   const dobRaw = getOptionalString(formData, "dob");
   const statusRaw = getOptionalString(formData, "status");
   const locationRaw = getOptionalString(formData, "location");
-  const ownerEmail = getOptionalString(formData, "owner_email");
-  const ownerIdRaw = getOptionalString(formData, "owner_id");
 
   if (statusRaw && !validateCatStatus(statusRaw)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Baik, Kurang Baik, Sakit.");
@@ -50,19 +48,16 @@ export async function createCat(formData: FormData) {
 
   const supabase = await createSupabaseServerClient();
 
-  let ownerId = ownerIdRaw || null;
-  if (!ownerId && ownerEmail) {
-    const { data: ownerProfile, error } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("email", ownerEmail)
-      .maybeSingle();
-    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
-    ownerId = ownerProfile?.id ?? null;
-  }
-
+  const { data: ownerProfile, error: ownerError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("role", "owner")
+    .limit(1)
+    .maybeSingle();
+  if (ownerError) throw new AppError(ErrorCode.DB_ERROR, ownerError.message, ownerError);
+  const ownerId = ownerProfile?.id ?? null;
   if (!ownerId) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Owner tidak ditemukan. Isi email atau UUID owner yang valid.");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Tidak ada profil owner di database. Tambah user dengan role owner dulu.");
   }
 
   const status = statusRaw && validateCatStatus(statusRaw) ? statusRaw : DEFAULT_STATUS;
@@ -84,6 +79,37 @@ export async function createCat(formData: FormData) {
     throw new AppError(ErrorCode.DB_ERROR, insertError.message, insertError);
   }
 
+  revalidateCats();
+}
+
+export type CreateCatState =
+  | { status: "idle" }
+  | { status: "success" }
+  | { status: "error"; message: string };
+
+export async function createCatWithState(
+  _prevState: CreateCatState,
+  formData: FormData,
+): Promise<CreateCatState> {
+  try {
+    await createCat(formData);
+    return { status: "success" };
+  } catch (error) {
+    console.error("Failed to create cat", error);
+    return {
+      status: "error",
+      message: getFriendlyMessage(error),
+    };
+  }
+}
+
+export async function deleteCat(formData: FormData) {
+  await requireAdmin();
+  const id = getString(formData, "id", { required: true });
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("cats").delete().eq("id", id);
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  revalidateCat(id);
   revalidateCats();
 }
 
