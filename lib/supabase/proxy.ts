@@ -30,6 +30,7 @@ export async function updateSession(request: NextRequest) {
         cookiesToSet.forEach(({ name, value, options }) => {
           const opts = (options ?? {}) as Record<string, unknown>;
           if (opts.maxAge == null) opts.maxAge = oneHour;
+          if (opts.path == null) opts.path = "/";
           supabaseResponse.cookies.set(name, value, opts);
         });
       },
@@ -38,18 +39,10 @@ export async function updateSession(request: NextRequest) {
 
   // Triggers token refresh and updates cookies via setAll.
   // Do not add logic between createServerClient and this call.
-  const { data: { user } } = await supabase.auth.getUser();
+  await supabase.auth.getUser();
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirectTo", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
-  }
-
+  // Jangan redirect di proxy: di banyak request (mis. RSC saat client navigation)
+  // cookie kadang tidak terkirim ke proxy, sehingga getUser() null dan user
+  // terus diarahkan ke login. Redirect ke login hanya di (app) layout.
   return supabaseResponse;
 }
