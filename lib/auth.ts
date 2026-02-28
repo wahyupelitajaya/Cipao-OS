@@ -25,29 +25,44 @@ function isSessionInvalidError(err: unknown): boolean {
   return typeof code === "string" && SESSION_INVALID_CODES.has(code);
 }
 
+/** Next.js redirect() throws; jangan swallow agar redirect tetap jalan. */
+function isNextRedirect(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "digest" in err &&
+    String((err as { digest?: string }).digest).startsWith("NEXT_REDIRECT")
+  );
+}
+
 export async function getSessionProfile() {
-  const supabase = await createSupabaseServerClient();
-
-  let session: { user: { id: string } } | null = null;
   try {
-    const { data } = await supabase.auth.getSession();
-    session = data.session;
-  } catch (err) {
-    if (isSessionInvalidError(err)) {
-      redirect("/auth/logout");
+    const supabase = await createSupabaseServerClient();
+
+    let session: { user: { id: string } } | null = null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+    } catch (err) {
+      if (isSessionInvalidError(err)) {
+        redirect("/auth/logout");
+      }
+      return { session: null, profile: null };
     }
-    throw err;
+
+    if (!session?.user) return { session: null, profile: null };
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id,email,role")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    return { session, profile: profile as Profile | null };
+  } catch (err) {
+    if (isNextRedirect(err)) throw err;
+    return { session: null, profile: null };
   }
-
-  if (!session?.user) return { session: null, profile: null };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id,email,role")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-  return { session, profile: profile as Profile | null };
 }
 
 export function isAdmin(profile: Profile | null | undefined): boolean {
