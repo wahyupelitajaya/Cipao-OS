@@ -1,0 +1,429 @@
+"use server";
+
+import { createSupabaseServerClient } from "@/lib/supabaseClient";
+import { requireAdmin } from "@/lib/auth";
+import { AppError, ErrorCode } from "@/lib/errors";
+import { revalidateCat, revalidateHealth, revalidateGrooming } from "@/lib/revalidate";
+import {
+  getString,
+  getOptionalString,
+  getDate,
+  requireDate,
+  getWeightKg,
+  getJsonStringArray,
+  getJson,
+  validateHealthType,
+  validatePreventiveType,
+} from "@/lib/validation";
+import { todayISO } from "@/lib/dates";
+import { PREVENTIVE_TITLES, PREVENTIVE_INTERVALS } from "@/lib/constants";
+import type { PreventiveType } from "@/lib/constants";
+import { BULK_MAX_IDS } from "@/lib/constants";
+
+export async function addHealthLog(formData: FormData) {
+  await requireAdmin();
+
+  const catId = getString(formData, "cat_id", { required: true });
+  const type = getString(formData, "type", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+  const title = getString(formData, "title", { required: true, maxLength: 500 });
+  const details = getOptionalString(formData, "details");
+  const nextDue = getDate(formData, "next_due_date");
+  const isActiveTreatment = formData.get("is_active_treatment") === "on";
+
+  if (!validateHealthType(type)) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Tipe log kesehatan tidak valid.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("health_logs").insert({
+    cat_id: catId,
+    type,
+    date,
+    title,
+    details: details || null,
+    next_due_date: nextDue,
+    is_active_treatment: isActiveTreatment,
+  });
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+
+  revalidateCat(catId);
+  revalidateHealth();
+}
+
+export async function bulkAddHealthLog(formData: FormData) {
+  await requireAdmin();
+
+  const catIds = getJsonStringArray(formData, "cat_ids");
+  if (catIds.length === 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih minimal satu kucing.");
+  }
+
+  const type = getString(formData, "type", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+  const title = getString(formData, "title", { required: true, maxLength: 500 });
+  const details = getOptionalString(formData, "details");
+  const nextDue = getDate(formData, "next_due_date");
+
+  if (!validateHealthType(type)) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Tipe log kesehatan tidak valid.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  for (const catId of catIds) {
+    const { error } = await supabase.from("health_logs").insert({
+      cat_id: catId,
+      type,
+      date,
+      title,
+      details: details || null,
+      next_due_date: nextDue,
+      is_active_treatment: false,
+    });
+    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  }
+
+  revalidateHealth();
+  for (const catId of catIds) {
+    revalidateCat(catId);
+  }
+}
+
+export async function addWeightLog(formData: FormData) {
+  await requireAdmin();
+
+  const catId = getString(formData, "cat_id", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+  const weight = getWeightKg(formData, "weight_kg");
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("weight_logs").insert({
+    cat_id: catId,
+    date,
+    weight_kg: weight,
+  });
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+
+  revalidateCat(catId);
+  revalidateHealth();
+}
+
+export async function addGroomingLog(formData: FormData) {
+  await requireAdmin();
+
+  const catId = getString(formData, "cat_id", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("grooming_logs").insert({
+    cat_id: catId,
+    date,
+  });
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+
+  revalidateCat(catId);
+  revalidateGrooming();
+}
+
+export async function updateGroomingLog(formData: FormData) {
+  await requireAdmin();
+
+  const id = getString(formData, "id", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("grooming_logs")
+    .update({ date })
+    .eq("id", id)
+    .select("cat_id")
+    .single();
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  if (!data?.cat_id) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Log grooming tidak ditemukan.");
+  }
+
+  revalidateCat(data.cat_id);
+  revalidateGrooming();
+}
+
+interface BulkGroomingItem {
+  catId: string;
+  logId: string | null;
+}
+
+function isBulkGroomingPayload(
+  v: unknown
+): v is { date?: string; items: BulkGroomingItem[] } {
+  if (v == null || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  if (!Array.isArray(o.items) || o.items.length === 0) return false;
+  if (o.items.length > BULK_MAX_IDS) return false;
+  return o.items.every(
+    (i) =>
+      i != null &&
+      typeof i === "object" &&
+      typeof (i as BulkGroomingItem).catId === "string" &&
+      ((i as BulkGroomingItem).logId === null ||
+        typeof (i as BulkGroomingItem).logId === "string")
+  );
+}
+
+export async function bulkSetGroomingDate(formData: FormData) {
+  await requireAdmin();
+
+  const date = requireDate(formData, "date", "Tanggal");
+  const payload = getJson<unknown>(formData, "payload");
+
+  if (!isBulkGroomingPayload(payload)) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Format payload tidak valid. Diperlukan items dengan catId dan logId.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  for (const { catId, logId } of payload.items) {
+    if (logId) {
+      const { data: updated, error } = await supabase
+        .from("grooming_logs")
+        .update({ date })
+        .eq("id", logId)
+        .eq("cat_id", catId)
+        .select("id")
+        .maybeSingle();
+      if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+      if (!updated) {
+        throw new AppError(ErrorCode.VALIDATION_ERROR, "Log grooming tidak ditemukan.");
+      }
+    } else {
+      const { error } = await supabase
+        .from("grooming_logs")
+        .insert({ cat_id: catId, date });
+      if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+    }
+  }
+
+  revalidateGrooming();
+  for (const { catId } of payload.items) {
+    revalidateCat(catId);
+  }
+}
+
+export async function updateHealthLogDate(formData: FormData) {
+  await requireAdmin();
+
+  const id = getString(formData, "id", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("health_logs")
+    .update({ date })
+    .eq("id", id)
+    .select("cat_id")
+    .single();
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  if (!data?.cat_id) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Log kesehatan tidak ditemukan.");
+  }
+
+  revalidateHealth();
+  revalidateCat(data.cat_id);
+}
+
+export async function setNextDueDate(formData: FormData) {
+  await requireAdmin();
+
+  const logId = getOptionalString(formData, "log_id");
+  const catId = getString(formData, "cat_id", { required: true });
+  const type = getString(formData, "type", { required: true });
+  const nextDue = requireDate(formData, "next_due_date", "Next due date");
+
+  if (!validatePreventiveType(type)) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Tipe harus VACCINE, FLEA, atau DEWORM.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const title = PREVENTIVE_TITLES[type as PreventiveType];
+
+  if (logId) {
+    const { data: updated, error } = await supabase
+      .from("health_logs")
+      .update({ next_due_date: nextDue })
+      .eq("id", logId)
+      .eq("cat_id", catId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+    if (!updated) {
+      throw new AppError(ErrorCode.VALIDATION_ERROR, "Log kesehatan tidak ditemukan.");
+    }
+  } else {
+    const { error } = await supabase.from("health_logs").insert({
+      cat_id: catId,
+      type,
+      date: todayISO(),
+      title,
+      next_due_date: nextDue,
+      is_active_treatment: false,
+    });
+    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  }
+
+  revalidateHealth();
+  revalidateCat(catId);
+}
+
+export async function bulkSetNextDueDate(formData: FormData) {
+  await requireAdmin();
+
+  const catIds = getJsonStringArray(formData, "cat_ids");
+  if (catIds.length === 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih minimal satu kucing.");
+  }
+
+  const type = getString(formData, "type", { required: true });
+  const nextDue = requireDate(formData, "next_due_date", "Next due date");
+
+  if (!validatePreventiveType(type)) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Tipe harus VACCINE, FLEA, atau DEWORM.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const today = todayISO();
+  const title = PREVENTIVE_TITLES[type as PreventiveType];
+
+  for (const catId of catIds) {
+    const { data: latest, error: fetchError } = await supabase
+      .from("health_logs")
+      .select("id")
+      .eq("cat_id", catId)
+      .eq("type", type)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (fetchError) throw new AppError(ErrorCode.DB_ERROR, fetchError.message, fetchError);
+
+    if (latest?.id) {
+      const { error: updateError } = await supabase
+        .from("health_logs")
+        .update({ next_due_date: nextDue })
+        .eq("id", latest.id)
+        .eq("cat_id", catId);
+      if (updateError) throw new AppError(ErrorCode.DB_ERROR, updateError.message, updateError);
+    } else {
+      const { error: insertError } = await supabase.from("health_logs").insert({
+        cat_id: catId,
+        type,
+        date: today,
+        title,
+        next_due_date: nextDue,
+        is_active_treatment: false,
+      });
+      if (insertError) throw new AppError(ErrorCode.DB_ERROR, insertError.message, insertError);
+    }
+  }
+
+  revalidateHealth();
+  for (const id of catIds) {
+    revalidateCat(id);
+  }
+}
+
+/**
+ * Calculates next due date based on preventive type and last date.
+ * Uses local date arithmetic to avoid timezone issues.
+ * Returns YYYY-MM-DD string or null if type has no interval.
+ */
+function calculateNextDueDate(type: PreventiveType, lastDate: string): string | null {
+  const monthsToAdd = PREVENTIVE_INTERVALS[type];
+  if (!monthsToAdd) return null;
+
+  // Parse the date (YYYY-MM-DD format)
+  const [year, month, day] = lastDate.split("-").map(Number);
+  
+  // Add months using Date arithmetic (handles year rollover automatically)
+  const dateObj = new Date(year, month - 1, day);
+  dateObj.setMonth(dateObj.getMonth() + monthsToAdd);
+  
+  // Format back to YYYY-MM-DD (local time, no timezone shift)
+  const nextYear = dateObj.getFullYear();
+  const nextMonth = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const nextDay = String(dateObj.getDate()).padStart(2, "0");
+  
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
+export async function bulkSetLastPreventiveDate(formData: FormData) {
+  await requireAdmin();
+
+  const catIds = getJsonStringArray(formData, "cat_ids");
+  if (catIds.length === 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih minimal satu kucing.");
+  }
+
+  const type = getString(formData, "type", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+
+  if (!validatePreventiveType(type)) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Tipe harus VACCINE, FLEA, atau DEWORM.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const title = PREVENTIVE_TITLES[type as PreventiveType];
+  
+  // Automatically calculate next due date based on preventive type
+  // This will be set only if next_due_date is currently null (manual override preserved)
+  const calculatedNextDue = calculateNextDueDate(type as PreventiveType, date);
+
+  for (const catId of catIds) {
+    const { data: latest, error: fetchError } = await supabase
+      .from("health_logs")
+      .select("id, next_due_date")
+      .eq("cat_id", catId)
+      .eq("type", type)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (fetchError) throw new AppError(ErrorCode.DB_ERROR, fetchError.message, fetchError);
+
+    if (latest?.id) {
+      // Only auto-calculate if next_due_date is not already set (preserve manual overrides)
+      const updateData: { date: string; next_due_date?: string | null } = { date };
+      if (latest.next_due_date === null && calculatedNextDue) {
+        updateData.next_due_date = calculatedNextDue;
+      }
+      
+      const { error: updateError } = await supabase
+        .from("health_logs")
+        .update(updateData)
+        .eq("id", latest.id)
+        .eq("cat_id", catId);
+      if (updateError) throw new AppError(ErrorCode.DB_ERROR, updateError.message, updateError);
+    } else {
+      // New log: always set calculated next due date
+      const { error: insertError } = await supabase.from("health_logs").insert({
+        cat_id: catId,
+        type,
+        date,
+        title,
+        next_due_date: calculatedNextDue,
+        is_active_treatment: false,
+      });
+      if (insertError) throw new AppError(ErrorCode.DB_ERROR, insertError.message, insertError);
+    }
+  }
+
+  revalidateHealth();
+  for (const id of catIds) {
+    revalidateCat(id);
+  }
+}
