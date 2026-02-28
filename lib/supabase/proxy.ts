@@ -26,8 +26,11 @@ export async function updateSession(request: NextRequest) {
         supabaseResponse = NextResponse.next({
           request,
         });
+        const oneHour = 60 * 60;
         cookiesToSet.forEach(({ name, value, options }) => {
-          supabaseResponse.cookies.set(name, value, options ?? {});
+          const opts = (options ?? {}) as Record<string, unknown>;
+          if (opts.maxAge == null) opts.maxAge = oneHour;
+          supabaseResponse.cookies.set(name, value, opts);
         });
       },
     },

@@ -115,13 +115,15 @@ Setelah itu, di tab **Cats** → edit kucing → Anda bisa memilih **Upload dari
 
 ### 2.6 Agar client tidak perlu login lagi (session lama)
 
-Supaya pengguna tidak diminta login ulang, atur **JWT expiry** di Supabase jadi **30 hari**:
+Supaya pengguna tidak diminta login ulang, atur **Access token expiry (JWT)** di Supabase:
 
-1. Buka **Supabase Dashboard** → pilih project → **Authentication** → **Settings** (atau **Project Settings** → **Auth**).
-2. Cari **JWT expiry** / **JWT Expiry limit** (nilai dalam **detik**).
-3. Ubah menjadi **`2592000`** (= 30 hari). Simpan.
+1. Buka **Supabase Dashboard** → pilih project → klik **ikon gear (⚙️)** → **Project Settings**.
+2. Di menu kiri pilih **JWT** (bukan Authentication → Settings).
+3. Cari **"Access token expiry time"** (nilai dalam **detik**). Ubah misalnya ke **`604800`** (7 hari) atau **`86400`** (1 hari). Simpan.
 
-Setelah itu, session tetap valid sampai 30 hari selama refresh token dipakai. Aplikasi ini juga melakukan **refresh session otomatis setiap 10 menit** di client sehingga token selalu diperbarui dan client praktis tidak perlu login lagi selama tetap memakai app.
+Yang kamu lihat di **Authentication → Settings** (rate limit token refreshes, sign-ins, dll.) itu bukan JWT expiry. JWT expiry ada di **Project Settings → JWT**.
+
+Setelah diubah, session tetap valid sesuai nilai tersebut. Aplikasi ini juga melakukan **refresh session otomatis setiap 10 menit** di client sehingga token selalu diperbarui.
 
 Langkah lengkap: lihat **[docs/SESSION_SETUP.md](docs/SESSION_SETUP.md)**.
 

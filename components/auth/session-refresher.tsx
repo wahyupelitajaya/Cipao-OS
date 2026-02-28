@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabaseBrowserClient";
 
-/** Refresh interval in ms. Refresh before JWT expires so user is not asked to log in again. */
-const REFRESH_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+/** Refresh interval in ms. Sering refresh agar session tidak putus (mis. di Vercel). */
+const REFRESH_INTERVAL_MS = 60 * 1000; // 1 menit
 
 /**
  * Keeps Supabase session alive by refreshing the token periodically.

@@ -2,7 +2,7 @@
 
 import { FormEvent, useState, Suspense } from "react";
 import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabaseBrowserClient";
 import { isSafeRedirectPath } from "@/lib/validation";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 const supabase = createSupabaseBrowserClient();
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,11 +33,14 @@ function LoginForm() {
       return;
     }
 
+    // Pastikan session sudah tersimpan di cookie sebelum redirect.
+    await supabase.auth.getSession();
+
     const redirectTo = searchParams.get("redirectTo");
     const destination =
       redirectTo && isSafeRedirectPath(redirectTo) ? redirectTo : "/dashboard";
-    router.push(destination);
-    router.refresh();
+    // Full page redirect agar request berikutnya selalu kirim cookie (bukan client-side nav).
+    window.location.href = destination;
   }
 
   return (
