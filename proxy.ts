@@ -1,14 +1,13 @@
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { updateSession } from "@/lib/supabase/proxy";
 
 /**
- * Next.js 16 proxy: runs at the edge. On client-side navigation (RSC requests),
- * cookies are not always available here, so we do NOT redirect to login in proxy.
- * Auth is enforced in app/(app)/layout.tsx via getSessionProfile() which has
- * proper cookie access in Server Components.
+ * Next.js 16 proxy: refreshes Supabase session and updates cookies on every request.
+ * This is required so that Server Components get a valid session on client-side navigation
+ * (otherwise session can be stale and data disappears when changing pages).
  */
-export function proxy(_request: NextRequest) {
-  return NextResponse.next();
+export async function proxy(request: NextRequest) {
+  return await updateSession(request);
 }
 
 export const config = {
