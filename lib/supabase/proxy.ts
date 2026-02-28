@@ -34,11 +34,17 @@ export async function updateSession(request: NextRequest) {
   });
 
   // Triggers token refresh and updates cookies via setAll.
-  // Do not add logic between createServerClient and this call.
-  await supabase.auth.getUser();
+  // Wrapped in try/catch: concurrent prefetch requests can race on the same
+  // refresh token (Supabase Refresh Token Rotation). If one request already
+  // consumed the token, subsequent concurrent requests will get an error.
+  // In that case, just pass through without modifying cookies — the server
+  // component will read the original cookies which may still have a valid JWT.
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Silently pass through — do not crash the request.
+    // The server component will handle auth checks independently.
+  }
 
-  // Jangan redirect di proxy: di banyak request (mis. RSC saat client navigation)
-  // cookie kadang tidak terkirim ke proxy, sehingga getUser() null dan user
-  // terus diarahkan ke login. Redirect ke login hanya di (app) layout.
   return supabaseResponse;
 }

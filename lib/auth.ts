@@ -19,34 +19,40 @@ export interface Profile {
  *   "not logged in" from "logged in but profile fetch failed".
  */
 export async function getSessionProfile() {
-  const supabase = await createSupabaseServerClient();
-
-  // 1. Read session from cookie — this does NOT make a network call to Supabase.
-  //    It simply reads the JWT from the cookie set by the proxy.
-  const { data, error: sessionError } = await supabase.auth.getSession();
-
-  if (sessionError || !data.session?.user) {
-    // No valid session cookie → user is genuinely not logged in
-    return { session: null, profile: null };
-  }
-
-  const session = data.session;
-
-  // 2. We have a valid session. Now fetch the profile from DB.
-  //    If this fails (rate limit, timeout, etc.), we still return the session
-  //    so the caller knows the user IS authenticated — just the profile is missing.
   try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id,email,role")
-      .eq("id", session.user.id)
-      .maybeSingle();
+    const supabase = await createSupabaseServerClient();
 
-    return { session, profile: profile as Profile | null };
+    // 1. Read session from cookie — this does NOT make a network call to Supabase.
+    //    It simply reads the JWT from the cookie set by the proxy.
+    const { data, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !data.session?.user) {
+      // No valid session cookie → user is genuinely not logged in
+      return { session: null, profile: null };
+    }
+
+    const session = data.session;
+
+    // 2. We have a valid session. Now fetch the profile from DB.
+    //    If this fails (rate limit, timeout, etc.), we still return the session
+    //    so the caller knows the user IS authenticated — just the profile is missing.
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id,email,role")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      return { session, profile: profile as Profile | null };
+    } catch {
+      // DB error — user is authenticated but we can't fetch their profile right now.
+      // Return session so the caller knows NOT to redirect to login.
+      return { session, profile: null };
+    }
   } catch {
-    // DB error — user is authenticated but we can't fetch their profile right now.
-    // Return session so the caller knows NOT to redirect to login.
-    return { session, profile: null };
+    // Outermost safety net: if even createSupabaseServerClient() or cookies() throws,
+    // return null gracefully instead of crashing the request.
+    return { session: null, profile: null };
   }
 }
 
