@@ -257,7 +257,7 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
   const colSpanBase = admin ? 8 : 7;
 
   return (
-    <div className="space-y-4">
+    <div className="w-full min-w-0 space-y-4">
       {admin && selectedCount > 0 && (
         <div className="card space-y-3 px-5 py-4 text-sm">
           <div className="flex flex-wrap items-center gap-2">
@@ -358,8 +358,9 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
         </div>
       )}
 
-      <div className="table-container overflow-hidden">
-        <table className="min-w-full text-sm">
+      {/* Kotak scroll: scroll horizontal & vertikal di sini, scrollbar tetap terlihat tanpa scroll halaman ke bawah */}
+      <div className="w-full max-w-full overflow-auto rounded-xl border border-border max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
+        <table className="min-w-[900px] w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {admin && (

@@ -21,7 +21,7 @@ export default async function HealthPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-12 w-full min-w-0">
       <header>
         <h1 className="text-2xl font-medium tracking-tight text-foreground">
           Health
@@ -31,7 +31,9 @@ export default async function HealthPage() {
         </p>
       </header>
 
-      <HealthTable rows={rows} breeds={(breeds ?? []) as Breed[]} admin={admin} />
+      <div className="w-full min-w-0">
+        <HealthTable rows={rows} breeds={(breeds ?? []) as Breed[]} admin={admin} />
+      </div>
     </div>
   );
 }
