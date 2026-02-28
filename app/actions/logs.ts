@@ -1,7 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminOrGroomer } from "@/lib/auth";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { revalidateCat, revalidateHealth, revalidateGrooming } from "@/lib/revalidate";
 import {
@@ -111,7 +111,7 @@ export async function addWeightLog(formData: FormData) {
 }
 
 export async function addGroomingLog(formData: FormData) {
-  await requireAdmin();
+  await requireAdminOrGroomer();
 
   const catId = getString(formData, "cat_id", { required: true });
   const date = requireDate(formData, "date", "Tanggal");
@@ -129,7 +129,7 @@ export async function addGroomingLog(formData: FormData) {
 }
 
 export async function updateGroomingLog(formData: FormData) {
-  await requireAdmin();
+  await requireAdminOrGroomer();
 
   const id = getString(formData, "id", { required: true });
   const date = requireDate(formData, "date", "Tanggal");
@@ -174,7 +174,7 @@ function isBulkGroomingPayload(
 }
 
 export async function bulkSetGroomingDate(formData: FormData) {
-  await requireAdmin();
+  await requireAdminOrGroomer();
 
   const date = requireDate(formData, "date", "Tanggal");
   const payload = getJson<unknown>(formData, "payload");

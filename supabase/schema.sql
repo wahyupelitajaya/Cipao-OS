@@ -8,7 +8,7 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text not null unique,
-  role text not null check (role in ('admin', 'owner')),
+  role text not null check (role in ('admin', 'owner', 'groomer')),
   created_at timestamptz not null default now()
 );
 
@@ -24,6 +24,21 @@ as $$
     from public.profiles
     where id = auth.uid()
       and role = 'admin'
+  );
+$$;
+
+-- Helper function: is_groomer() — can edit grooming for own cats (owner_id = auth.uid())
+create or replace function public.is_groomer()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'groomer'
   );
 $$;
 
@@ -179,6 +194,11 @@ on public.cats
 for select
 using (owner_id = auth.uid());
 
+drop policy if exists "cats_groomer_select_all" on public.cats;
+create policy "cats_groomer_select_all"
+on public.cats for select
+using (is_groomer());
+
 -- Health logs RLS
 drop policy if exists "health_admin_all" on public.health_logs;
 create policy "health_admin_all"
@@ -199,6 +219,11 @@ using (
       and c.owner_id = auth.uid()
   )
 );
+
+drop policy if exists "health_groomer_select_all" on public.health_logs;
+create policy "health_groomer_select_all"
+on public.health_logs for select
+using (is_groomer());
 
 -- Weight logs RLS
 drop policy if exists "weight_admin_all" on public.weight_logs;
@@ -221,6 +246,11 @@ using (
   )
 );
 
+drop policy if exists "weight_groomer_select_all" on public.weight_logs;
+create policy "weight_groomer_select_all"
+on public.weight_logs for select
+using (is_groomer());
+
 -- Grooming logs RLS
 drop policy if exists "grooming_admin_all" on public.grooming_logs;
 create policy "grooming_admin_all"
@@ -241,6 +271,13 @@ using (
       and c.owner_id = auth.uid()
   )
 );
+
+drop policy if exists "grooming_groomer_write_own_cats" on public.grooming_logs;
+drop policy if exists "grooming_groomer_all" on public.grooming_logs;
+create policy "grooming_groomer_all"
+on public.grooming_logs for all
+using (is_groomer())
+with check (is_groomer());
 
 -- Inventory items RLS
 drop policy if exists "inventory_items_select_all_authenticated" on public.inventory_items;

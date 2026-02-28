@@ -1,60 +1,63 @@
 -- Seed data for Cat Operational System
 -- IMPORTANT:
--- 1) Create one admin user and one owner user in Supabase Auth.
--- 2) Replace the placeholders below with the actual auth.users IDs.
+-- 1) Create admin, owner, groomer users in Supabase Auth (Authentication → Users).
+-- 2) Replace the placeholders below with the actual auth.users IDs (id from auth.users).
 
--- Replace these with real UUIDs from auth.users
--- select id, email from auth.users;
--- Then paste:
---   ADMIN_USER_ID  -> admin
---   OWNER_USER_ID  -> owner (all starter cats belong to this owner)
+-- Replace with real UUIDs from auth.users (select id, email from auth.users;)
+--   ADMIN_USER_ID_PLACEHOLDER  → wahyu@admin.sb   (admin)
+--   2d64eb80-1497-4ce3-9935-9ef0336de54d  → cc@owner.sb      (owner, all starter cats belong to this owner)
+--   GROOMER_USER_ID_PLACEHOLDER → ivan@groomer.sb (groomer)
 
--- BEGIN PLACEHOLDERS (edit before running)
--- example: '11111111-1111-1111-1111-111111111111'
 insert into public.profiles (id, email, role) values
-  ('c30eb2f5-7990-46fb-a869-52d1272c1f28', 'admin@example.com', 'admin')
+  ('8894f890-be44-4108-adc6-68d3259df35f', 'wahyu@admin.sb', 'admin')
 on conflict (id) do update set role = excluded.role, email = excluded.email;
 
 insert into public.profiles (id, email, role) values
-  ('303b6caa-fff2-4856-b0dd-44f5fe1011f5', 'owner@example.com', 'owner')
+  ('2d64eb80-1497-4ce3-9935-9ef0336de54d', 'cc@owner.sb', 'owner')
 on conflict (id) do update set role = excluded.role, email = excluded.email;
--- END PLACEHOLDERS
+
+insert into public.profiles (id, email, role) values
+  ('011b4588-eb39-4c09-a6dd-93e864e7a3fb', 'ivan@groomer.sb', 'groomer')
+on conflict (id) do update set role = excluded.role, email = excluded.email;
 
 -- Starter cats (31)
--- All assigned to 303b6caa-fff2-4856-b0dd-44f5fe1011f5 for MVP.
+-- All assigned to 2d64eb80-1497-4ce3-9935-9ef0336de54d (replace with owner's UUID).
+-- NOTE: Seed only inserts cat_id, name, owner_id, is_active. Columns photo_url, dob,
+-- status, location, status_manual, breed_id are NOT set. After restore from seed (e.g.
+-- after cascade delete), photos and optional fields will be empty — fill via app or restore backup.
 insert into public.cats (cat_id, name, owner_id, is_active)
 values
-  ('CAT-001', 'Array', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-002', 'Bara', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-003', 'Bian', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-004', 'Blacky', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-005', 'Bobi', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-006', 'Boodie', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-007', 'Boone', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-008', 'Cantik', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-009', 'Celi', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-010', 'Celo', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-011', 'Chiko', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-012', 'Cici', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-013', 'Ciko', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-014', 'Cimo', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-015', 'Cipao', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-016', 'Gempi', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-017', 'Gian', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-018', 'Inaya', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-019', 'Izaan', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-020', 'Joko', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-021', 'Kino', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-022', 'Kona', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-023', 'Markonah', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-024', 'Mauza', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-025', 'Miki', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-026', 'Miko', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-027', 'Miu', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-028', 'Mochi', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-029', 'Moli', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-030', 'Oreo', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true),
-  ('CAT-031', 'Pusi', '303b6caa-fff2-4856-b0dd-44f5fe1011f5', true)
+  ('CAT-001', 'Array', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-002', 'Bara', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-003', 'Bian', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-004', 'Blacky', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-005', 'Bobi', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-006', 'Boodie', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-007', 'Boone', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-008', 'Cantik', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-009', 'Celi', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-010', 'Celo', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-011', 'Chiko', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-012', 'Cici', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-013', 'Ciko', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-014', 'Cimo', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-015', 'Cipao', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-016', 'Gempi', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-017', 'Gian', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-018', 'Inaya', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-019', 'Izaan', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-020', 'Joko', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-021', 'Kino', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-022', 'Kona', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-023', 'Markonah', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-024', 'Mauza', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-025', 'Miki', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-026', 'Miko', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-027', 'Miu', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-028', 'Mochi', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-029', 'Moli', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-030', 'Oreo', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true),
+  ('CAT-031', 'Pusi', '2d64eb80-1497-4ce3-9935-9ef0336de54d', true)
 on conflict (cat_id) do nothing;
 
 -- Sample health logs & weight logs for a few cats
@@ -143,16 +146,19 @@ select
 from cat_ids c
 limit 5;
 
--- Sample inventory
-insert into public.inventory_items (category, name, stock_qty, unit, min_stock_qty)
-values
-  ('LITTER', 'Clumping litter 10kg', 4, 'bag', 2),
-  ('LITTER', 'Silica gel litter 5kg', 1, 'bag', 2),
-  ('FOOD', 'Dry food adult 10kg', 3, 'bag', 2),
-  ('FOOD', 'Wet food pouch', 24, 'pcs', 12),
-  ('MED_VIT', 'Flea spot-on', 2, 'pipette', 4),
-  ('MED_VIT', 'Deworming tablet', 6, 'tablet', 4)
-on conflict (name) do nothing;
+-- Sample inventory (butuh inventory_categories dari migration 20250225300000)
+insert into public.inventory_items (category_id, name, stock_qty, unit, min_stock_qty)
+select c.id, v.name, v.stock_qty, v.unit, v.min_stock_qty
+from (values
+  ('Clumping litter 10kg', 4::numeric, 'bag', 2::numeric, 'LITTER'),
+  ('Silica gel litter 5kg', 1::numeric, 'bag', 2::numeric, 'LITTER'),
+  ('Dry food adult 10kg', 3::numeric, 'bag', 2::numeric, 'FOOD'),
+  ('Wet food pouch', 24::numeric, 'pcs', 12::numeric, 'FOOD'),
+  ('Flea spot-on', 2::numeric, 'pipette', 4::numeric, 'MED_VIT'),
+  ('Deworming tablet', 6::numeric, 'tablet', 4::numeric, 'MED_VIT')
+) as v(name, stock_qty, unit, min_stock_qty, slug)
+join public.inventory_categories c on c.slug = v.slug
+where not exists (select 1 from public.inventory_items i where i.name = v.name);
 
 with items as (
   select id, name from public.inventory_items

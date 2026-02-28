@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "./supabaseClient";
 import { AppError, ErrorCode } from "./errors";
 
-export type ProfileRole = "admin" | "owner";
+export type ProfileRole = "admin" | "owner" | "groomer";
 
 export interface Profile {
   id: string;
@@ -60,6 +60,15 @@ export function isAdmin(profile: Profile | null | undefined): boolean {
   return profile?.role === "admin";
 }
 
+export function isGroomer(profile: Profile | null | undefined): boolean {
+  return profile?.role === "groomer";
+}
+
+/** Admin or groomer can edit grooming tab; owner is read-only there. */
+export function canEditGrooming(profile: Profile | null | undefined): boolean {
+  return profile?.role === "admin" || profile?.role === "groomer";
+}
+
 /**
  * Require any authenticated user. Throws if not logged in.
  */
@@ -101,4 +110,13 @@ export async function requireOwnerOrAdmin(catId: string): Promise<Profile> {
     throw new AppError(ErrorCode.NOT_AUTHORIZED, "Not authorized.");
   }
   return profile;
+}
+
+/**
+ * Require admin or groomer. Used for grooming-only actions (add/update grooming logs).
+ */
+export async function requireAdminOrGroomer(): Promise<Profile> {
+  const profile = await requireUser();
+  if (isAdmin(profile) || isGroomer(profile)) return profile;
+  throw new AppError(ErrorCode.NOT_AUTHORIZED, "Not authorized.");
 }

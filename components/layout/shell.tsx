@@ -59,7 +59,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
               {profile?.email ?? "—"}
             </p>
             <p className="mt-0.5 text-xs capitalize text-muted-foreground">
-              {profile?.role ?? "guest"}
+              {profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : "guest"}
             </p>
             <div className="mt-3">
               <LogoutButton sidebar />

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState, Suspense } from "react";
+import { FormEvent, useState, Suspense, useEffect } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabaseBrowserClient";
@@ -17,12 +17,32 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Jika ada session tapi tidak ada di profiles (akun dihapus dari DB), sign out dan tampilkan error.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (cancelled || !session?.user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!profile) {
+        await supabase.auth.signOut();
+        setError("Akun tidak terdaftar di database. Silakan hubungi admin.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -31,6 +51,23 @@ function LoginForm() {
       setError(error.message);
       setLoading(false);
       return;
+    }
+
+    // Cek apakah user punya profil di database (harus ada di public.profiles).
+    const userId = signInData.user?.id;
+    if (userId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (!profile) {
+        await supabase.auth.signOut();
+        setError("Akun tidak terdaftar. Email atau password tidak ada di database.");
+        setLoading(false);
+        return;
+      }
     }
 
     // Pastikan session sudah tersimpan di cookie sebelum redirect.

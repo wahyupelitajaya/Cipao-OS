@@ -80,6 +80,7 @@ export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
                   { href: "/health", label: "Health" },
                   { href: "/grooming", label: "Grooming" },
                   { href: "/inventory", label: "Inventory" },
+                  { href: "/activity", label: "Activity" },
                 ].map(({ href, label }) => (
                   <CommandItemLink
                     key={href}

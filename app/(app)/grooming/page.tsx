@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
-import { getSessionProfile, isAdmin } from "@/lib/auth";
+import { getSessionProfile, canEditGrooming } from "@/lib/auth";
 import type { Tables } from "@/lib/types";
 import { GroomingTable } from "@/components/grooming/grooming-table";
 
@@ -10,7 +10,7 @@ type GroomingLog = Tables<"grooming_logs">;
 export default async function GroomingPage() {
   const supabase = await createSupabaseServerClient();
   const { profile } = await getSessionProfile();
-  const admin = isAdmin(profile);
+  const canEdit = canEditGrooming(profile);
 
   const [
     { data: cats = [] },
@@ -63,7 +63,7 @@ export default async function GroomingPage() {
         </p>
       </header>
 
-      <GroomingTable rows={rows} breeds={(breeds ?? []) as Breed[]} admin={admin} />
+      <GroomingTable rows={rows} breeds={(breeds ?? []) as Breed[]} canEdit={canEdit} />
     </div>
   );
 }

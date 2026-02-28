@@ -112,5 +112,5 @@ export const WEIGHT_MAX_KG = 50;
 /** Max bulk array length for bulk actions */
 export const BULK_MAX_IDS = 100;
 
-/** Default page size for paginated lists (cats, reports) */
-export const DEFAULT_PAGE_SIZE = 20;
+/** Default page size for paginated lists (cats, reports). 50 so all seed cats (31) fit on first page. */
+export const DEFAULT_PAGE_SIZE = 50;

@@ -9,8 +9,8 @@ const navItems = [
   { href: "/cats", label: "Cats" },
   { href: "/health", label: "Health" },
   { href: "/grooming", label: "Grooming" },
-  { href: "/activity", label: "Aktivitas" },
   { href: "/inventory", label: "Inventory" },
+  { href: "/activity", label: "Aktivitas" },
 ];
 
 export function NavLinks() {

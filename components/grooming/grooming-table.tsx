@@ -22,7 +22,8 @@ export interface GroomingRow {
 interface GroomingTableProps {
   rows: GroomingRow[];
   breeds: Breed[];
-  admin: boolean;
+  /** Admin or groomer can edit; owner is read-only. */
+  canEdit: boolean;
 }
 
 function formatDate(date: Date): string {
@@ -33,7 +34,7 @@ function formatDate(date: Date): string {
   });
 }
 
-export function GroomingTable({ rows, breeds, admin }: GroomingTableProps) {
+export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
   const router = useRouter();
   const breedsById = new Map(breeds.map((b) => [b.id, b]));
   const [isPending, startTransition] = useTransition();
@@ -83,7 +84,7 @@ export function GroomingTable({ rows, breeds, admin }: GroomingTableProps) {
 
   return (
     <div className="space-y-6">
-      {admin && selectedCount > 0 && (
+      {canEdit && selectedCount > 0 && (
         <form
           onSubmit={handleBulkSubmit}
           className="card flex flex-wrap items-center gap-3 px-5 py-4"
@@ -116,7 +117,7 @@ export function GroomingTable({ rows, breeds, admin }: GroomingTableProps) {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {admin && (
+              {canEdit && (
                 <th className="w-10 px-5 py-3">
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -138,7 +139,7 @@ export function GroomingTable({ rows, breeds, admin }: GroomingTableProps) {
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={admin ? 4 : 3}
+                  colSpan={canEdit ? 4 : 3}
                   className="px-5 py-8 text-center text-sm text-muted-foreground"
                 >
                   Tidak ada kucing.
@@ -150,7 +151,7 @@ export function GroomingTable({ rows, breeds, admin }: GroomingTableProps) {
                 key={cat.id}
                 className="border-b border-border last:border-b-0 hover:bg-muted/20"
               >
-                {admin && (
+                {canEdit && (
                   <td className="px-5 py-3 align-middle">
                     <label className="flex cursor-pointer items-center">
                       <input
@@ -199,7 +200,7 @@ export function GroomingTable({ rows, breeds, admin }: GroomingTableProps) {
                     <Button asChild variant="ghost" size="sm">
                       <Link href={`/cats/${cat.id}`}>Buka</Link>
                     </Button>
-                    {admin &&
+                    {canEdit &&
                       (last ? (
                         <EditGroomingDialog catName={cat.name} log={last} />
                       ) : (
