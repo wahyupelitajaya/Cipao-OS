@@ -86,8 +86,8 @@ export async function AppShell({ children }: { children: ReactNode }) {
           <div className="hidden min-w-0 flex-1 max-w-md lg:block">
             <GlobalCommand searchData={searchData} />
           </div>
-          <div className="flex shrink-0 items-center gap-2 lg:flex-1 lg:justify-end">
-            <div className="lg:hidden">
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-1 lg:justify-end">
+            <div className="min-w-0 flex-1 lg:hidden">
               <GlobalCommand searchData={searchData} />
             </div>
             <LogoutButton compact />

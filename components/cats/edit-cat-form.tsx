@@ -51,12 +51,6 @@ export function EditCatForm({ cat, breeds }: EditCatFormProps) {
       <input type="hidden" name="id" value={cat.id} />
       <div className="space-y-1">
         <label className="text-xs font-medium text-muted-foreground">
-          Cat ID
-        </label>
-        <Input value={cat.cat_id} disabled />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">
           Name
         </label>
         <Input name="name" defaultValue={cat.name} required />

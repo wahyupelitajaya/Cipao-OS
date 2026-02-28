@@ -330,9 +330,6 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
                           {breedsById.get(cat.breed_id)!.name}
                         </span>
                       )}
-                      <span className="text-xs text-muted-foreground sm:hidden">
-                        {cat.cat_id}
-                      </span>
                     </span>
                   </Link>
                 </td>

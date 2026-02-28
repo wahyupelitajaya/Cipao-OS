@@ -35,10 +35,10 @@ export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "flex h-9 w-full items-center gap-2 bg-transparent px-0 text-left text-sm focus:outline-none",
+          "flex h-9 w-full min-w-0 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-sm shadow-sm focus:outline-none",
           sidebar
-            ? "border-b border-border text-muted-foreground hover:text-foreground [&_kbd]:text-muted-foreground/80"
-            : "border-b border-border text-muted-foreground hover:text-foreground",
+            ? "text-muted-foreground hover:text-foreground [&_kbd]:text-muted-foreground/80"
+            : "text-muted-foreground hover:text-foreground",
         )}
       >
         <Search className="h-4 w-4 shrink-0" />
@@ -49,22 +49,23 @@ export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
       </button>
       {open ? (
         <div
-          className="fixed inset-0 z-40 flex items-start justify-center bg-background/80 px-4 pt-20 backdrop-blur-sm"
+          className="fixed inset-0 z-40 flex items-start justify-center bg-black/20 px-4 pt-20 backdrop-blur-md"
           onClick={() => setOpen(false)}
           onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
         >
           <CommandPrimitive.Command
             className={cn(
-              "max-h-[70vh] w-full max-w-lg overflow-hidden border border-border bg-background",
+              "max-h-[70vh] w-full max-w-lg overflow-hidden rounded-2xl border border-border shadow-lg",
+              "bg-[hsl(38,22%,97%)] text-foreground",
             )}
             onClick={(e) => e.stopPropagation()}
           >
             <CommandPrimitive.CommandInput
               autoFocus
               placeholder="Nama kucing, ID, inventory, atau halaman…"
-              className="h-11 w-full border-b border-border px-4 text-sm outline-none placeholder:text-muted-foreground"
+              className="h-11 w-full border-b border-border bg-[hsl(38,22%,97%)] px-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
-            <CommandPrimitive.CommandList className="max-h-[320px] overflow-y-auto text-sm">
+            <CommandPrimitive.CommandList className="max-h-[320px] overflow-y-auto bg-[hsl(38,22%,97%)] text-sm text-foreground">
               <CommandPrimitive.CommandEmpty className="px-4 py-6 text-center text-xs text-muted-foreground">
                 Tidak ada hasil. Coba kata kunci lain.
               </CommandPrimitive.CommandEmpty>
@@ -100,7 +101,7 @@ export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
                       <CommandItemLink
                         href={`/cats/${cat.id}`}
                         label={`Profil: ${cat.name}`}
-                        value={`profil ${cat.name} ${cat.cat_id}`}
+                        value={`profil ${cat.name}`}
                         setOpen={setOpen}
                         icon={<User className="h-4 w-4" />}
                       />
@@ -128,7 +129,7 @@ export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
                 </CommandPrimitive.CommandGroup>
               ) : null}
             </CommandPrimitive.CommandList>
-            <div className="flex items-center justify-between border-t px-3 py-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center justify-between border-t border-border bg-[hsl(38,22%,97%)] px-3 py-2 text-[10px] text-muted-foreground">
               <span>Profil kucing, laporan, inventory, dan halaman</span>
               <span>Esc tutup</span>
             </div>
@@ -165,8 +166,8 @@ function CommandItemLink({
       className="group flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm data-[selected=true]:bg-muted"
     >
       {icon ? <span className="text-muted-foreground">{icon}</span> : null}
-      <Link href={href} className="flex flex-1 items-center justify-between gap-2" tabIndex={-1}>
-        <span>{label}</span>
+      <Link href={href} className="flex flex-1 items-center justify-between gap-2 text-foreground" tabIndex={-1}>
+        <span className="font-medium">{label}</span>
         {subLabel ? (
           <span className="truncate text-xs text-muted-foreground">{subLabel}</span>
         ) : null}
