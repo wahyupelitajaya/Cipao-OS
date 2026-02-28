@@ -19,19 +19,15 @@ export async function updateSession(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+      setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
         cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value);
         });
         supabaseResponse = NextResponse.next({
           request,
         });
-        const oneHour = 60 * 60;
         cookiesToSet.forEach(({ name, value, options }) => {
-          const opts = (options ?? {}) as Record<string, unknown>;
-          if (opts.maxAge == null) opts.maxAge = oneHour;
-          if (opts.path == null) opts.path = "/";
-          supabaseResponse.cookies.set(name, value, opts);
+          supabaseResponse.cookies.set(name, value, options);
         });
       },
     },
