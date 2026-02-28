@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -12,10 +12,18 @@ interface LogoutButtonProps {
 }
 
 /**
- * Logout uses GET /auth/logout so the server clears auth cookies and redirects to /login.
- * Client-only signOut() was not clearing cookies correctly for the middleware.
+ * Logout button that navigates to /auth/logout via full page navigation.
+ *
+ * IMPORTANT: We use window.location.href instead of <Link> because Next.js
+ * automatically prefetches <Link> destinations. If we used <Link href="/auth/logout">,
+ * Next.js would prefetch the logout route in the background, which calls signOut()
+ * and clears all auth cookies — logging the user out unexpectedly.
  */
 export function LogoutButton({ compact, sidebar }: LogoutButtonProps) {
+  function handleLogout() {
+    window.location.href = "/auth/logout";
+  }
+
   return (
     <Button
       variant="ghost"
@@ -28,9 +36,9 @@ export function LogoutButton({ compact, sidebar }: LogoutButtonProps) {
         compact && "shrink-0",
         !compact && !sidebar && "mt-2 w-full justify-center",
       )}
-      asChild
+      onClick={handleLogout}
     >
-      <Link href="/auth/logout">Log out</Link>
+      Log out
     </Button>
   );
 }
