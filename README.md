@@ -215,13 +215,16 @@ All actions use `createSupabaseServerClient()` and revalidate relevant paths.
 
 1. Push this project to a Git provider (GitHub, GitLab, etc.).
 2. In Vercel, create a new project from the repo.
-3. Set environment variables on Vercel:
-
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
+3. **Set environment variables** (required; build fails without them):
+   - In Vercel: Project → **Settings** → **Environment Variables**
+   - Add:
+     - `NEXT_PUBLIC_SUPABASE_URL` = your Supabase project URL (e.g. `https://xxxx.supabase.co`)
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = your Supabase anon/public key
+   - Apply to **Production**, **Preview**, and **Development** if you use Vercel previews.
 4. Make sure Supabase RLS, `schema.sql`, and `seed.sql` have been applied as described above.
 5. Deploy. Vercel will run `npm install` and `npm run build` automatically.
+
+> **Note:** This project uses Next.js 16. Auth redirect logic lives in `proxy.ts` (not `middleware.ts`). Do not add `NEXT_PUBLIC_` to the Supabase service role key; that key must stay server-only.
 
 After deploy, log in with:
 
