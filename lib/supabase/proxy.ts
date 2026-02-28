@@ -10,9 +10,21 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 
 export async function updateSession(request: NextRequest) {
+  // Save the original request cookies BEFORE getUser() can modify them.
+  // This is critical: if getUser() internally fails (e.g. Refresh Token Rotation
+  // race condition), the Supabase client calls setAll() with EMPTY cookies to
+  // "clean up" the session BEFORE throwing. This clears auth cookies, even though
+  // we catch the error. By saving and restoring, we prevent this.
+  const originalCookies = request.cookies
+    .getAll()
+    .map((c) => ({ name: c.name, value: c.value }));
+
   let supabaseResponse = NextResponse.next({
     request,
   });
+
+  // Track whether setAll was called successfully (i.e., getUser resolved without error)
+  let getUserSucceeded = false;
 
   const supabase = createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     cookies: {
@@ -34,16 +46,23 @@ export async function updateSession(request: NextRequest) {
   });
 
   // Triggers token refresh and updates cookies via setAll.
-  // Wrapped in try/catch: concurrent prefetch requests can race on the same
-  // refresh token (Supabase Refresh Token Rotation). If one request already
-  // consumed the token, subsequent concurrent requests will get an error.
-  // In that case, just pass through without modifying cookies — the server
-  // component will read the original cookies which may still have a valid JWT.
   try {
     await supabase.auth.getUser();
+    getUserSucceeded = true;
   } catch {
-    // Silently pass through — do not crash the request.
-    // The server component will handle auth checks independently.
+    // getUser() failed — the Supabase client may have ALREADY called setAll()
+    // with empty cookies to clear the "invalid" session. We must revert this
+    // by restoring the original cookies on the request and creating a clean response.
+    getUserSucceeded = false;
+  }
+
+  if (!getUserSucceeded) {
+    // Restore original cookies on request so server components can read them
+    for (const c of originalCookies) {
+      request.cookies.set(c.name, c.value);
+    }
+    // Create a fresh response without any Set-Cookie headers that would clear cookies
+    supabaseResponse = NextResponse.next({ request });
   }
 
   return supabaseResponse;
