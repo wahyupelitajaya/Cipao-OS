@@ -34,6 +34,27 @@ function formatDate(date: Date): string {
   });
 }
 
+function formatAge(dob: string | null | undefined): string {
+  if (!dob) return "—";
+  try {
+    const birth = new Date(dob);
+    if (Number.isNaN(birth.getTime())) return "—";
+    const today = new Date();
+    let years = today.getFullYear() - birth.getFullYear();
+    let months = today.getMonth() - birth.getMonth();
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    if (years > 0 && months > 0) return `${years} tahun ${months} bulan`;
+    if (years > 0) return `${years} tahun`;
+    if (months > 0) return `${months} bulan`;
+    return "< 1 bulan";
+  } catch {
+    return "—";
+  }
+}
+
 export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
   const router = useRouter();
   const breedsById = new Map(breeds.map((b) => [b.id, b]));
@@ -184,11 +205,13 @@ export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
                     )}
                     <span className="flex flex-col gap-0.5">
                       <span>{cat.name}</span>
-                      {cat.breed_id && breedsById.get(cat.breed_id)?.name && (
-                        <span className="font-elegant text-[0.7rem] italic text-muted-foreground tracking-wide">
-                          {breedsById.get(cat.breed_id)!.name}
-                        </span>
-                      )}
+                      <span className="font-elegant text-[0.7rem] italic text-muted-foreground tracking-wide">
+                        {cat.breed_id && breedsById.get(cat.breed_id)?.name
+                          ? breedsById.get(cat.breed_id)!.name
+                          : "—"}
+                        {" | "}
+                        {formatAge(cat.dob)}
+                      </span>
                     </span>
                   </Link>
                 </td>
