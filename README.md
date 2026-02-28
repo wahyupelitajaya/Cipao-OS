@@ -113,6 +113,18 @@ Agar fitur **upload foto kucing** dari device berfungsi:
 
 Setelah itu, di tab **Cats** → edit kucing → Anda bisa memilih **Upload dari perangkat** (file foto) atau mengisi **URL foto** jika gambar sudah ada di internet.
 
+### 2.6 Agar client tidak perlu login lagi (session lama)
+
+Supaya pengguna tidak diminta login ulang, atur **JWT expiry** di Supabase jadi **30 hari**:
+
+1. Buka **Supabase Dashboard** → pilih project → **Authentication** → **Settings** (atau **Project Settings** → **Auth**).
+2. Cari **JWT expiry** / **JWT Expiry limit** (nilai dalam **detik**).
+3. Ubah menjadi **`2592000`** (= 30 hari). Simpan.
+
+Setelah itu, session tetap valid sampai 30 hari selama refresh token dipakai. Aplikasi ini juga melakukan **refresh session otomatis setiap 10 menit** di client sehingga token selalu diperbarui dan client praktis tidak perlu login lagi selama tetap memakai app.
+
+Langkah lengkap: lihat **[docs/SESSION_SETUP.md](docs/SESSION_SETUP.md)**.
+
 ---
 
 ## 3. Running the app locally

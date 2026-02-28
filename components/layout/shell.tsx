@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import { GlobalCommand } from "@/components/ui/command";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { NavLinks } from "@/components/layout/nav-links";
+import { SessionRefresher } from "@/components/auth/session-refresher";
 import { getSessionProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
 import { getSearchData } from "@/lib/data/search";
@@ -34,6 +35,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      <SessionRefresher />
       {/* Sidebar: fixed, tidak ikut scroll */}
       <aside className="fixed left-0 top-0 z-30 hidden h-screen w-36 flex-col overflow-y-auto border-r border-border bg-background-elevated shadow-soft lg:flex">
         <div className="flex flex-1 flex-col px-3 py-5">
