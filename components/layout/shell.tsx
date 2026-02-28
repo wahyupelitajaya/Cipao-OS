@@ -35,7 +35,6 @@ export async function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <SessionRefresher />
       {/* Sidebar: fixed, tidak ikut scroll */}
       <aside className="fixed left-0 top-0 z-30 hidden h-screen w-36 flex-col overflow-y-auto border-r border-border bg-background-elevated shadow-soft lg:flex">
         <div className="flex flex-1 flex-col px-3 py-5">

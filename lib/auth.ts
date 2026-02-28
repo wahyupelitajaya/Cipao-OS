@@ -41,25 +41,37 @@ export async function getSessionProfile() {
 
     let session: { user: { id: string } } | null = null;
     try {
-      const { data } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
+      if (error && isSessionInvalidError(error)) {
+        return { session: null, profile: null };
+      }
+      if (error) throw error;
       session = data.session;
     } catch (err) {
-      // Instead of forcing a redirect to /auth/logout which clears everything on soft failures,
-      // just treat it as no session and let the UI/Layout decide what to do.
-      return { session: null, profile: null };
+      if (isSessionInvalidError(err)) {
+        return { session: null, profile: null };
+      }
+      // Re-throw generic network or rate limit errors
+      throw err;
     }
 
     if (!session?.user) return { session: null, profile: null };
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id,email,role")
       .eq("id", session.user.id)
       .maybeSingle();
 
+    if (profileError) {
+      console.error("Failed to fetch profile due to DB error:", profileError);
+      throw new Error(`Database error fetching profile: ${profileError.message}`);
+    }
+
     return { session, profile: profile as Profile | null };
   } catch (err) {
     if (isNextRedirect(err)) throw err;
+    if (err instanceof Error) throw err; // propagate DB/Network errors to Next.js Error Boundary
     return { session: null, profile: null };
   }
 }
