@@ -108,7 +108,8 @@ Setelah ini, website Anda sudah punya dua rahasia: Verify Token untuk Meta, dan 
 5. Klik **Verify and Save**.  
    - Meta akan mengirim request **GET** ke URL Anda. Backend kita akan memeriksa token dan menjawab dengan “challenge” yang benar.  
    - Jika berhasil, Anda akan lihat tanda/status bahwa webhook **Verified**.  
-   - Jika gagal: cek lagi bahwa URL benar, env `WHATSAPP_VERIFY_TOKEN` sudah di-set di Vercel, dan project sudah di-redeploy.
+   - Jika gagal: cek lagi bahwa URL benar, env `WHATSAPP_VERIFY_TOKEN` sudah di-set di Vercel, dan project sudah di-redeploy.  
+   - Pesan "Apps will only receive test webhooks... unless published" **bukan error** — verifikasi sukses; app masih Development. Tambah nomor Anda di API Setup sebagai nomor uji, lalu kirim pesan ke nomor WA Business untuk tes.
 
 ---
 
@@ -129,31 +130,6 @@ Sekarang Meta akan memanggil URL Anda setiap ada pesan masuk ke nomor yang terhu
 2. Di bagian **Phone numbers**, pilih atau tambah nomor telepon yang akan dipakai untuk menerima pesan.
 3. Ikuti langkah verifikasi nomor sesuai yang diminta Meta (biasanya kode OTP lewat SMS/WhatsApp).
 4. Setelah nomor terhubung, setiap **pesan teks yang dikirim ke nomor ini** akan memicu webhook ke website Anda.
-
----
-
-## Pesan “Apps will only be able to receive test webhooks…” (Bukan Error)
-
-Setelah Anda klik **Verify and Save**, kadang Meta menampilkan kalimat seperti:
-
-> “Apps will only be able to receive test webhooks sent from the app dashboard while the app is unpublished. No production data, including from app admins, developers or testers, will be delivered unless the app has been published.”
-
-**Ini bukan error.** Artinya:
-
-- **Verifikasi webhook Anda biasanya sudah berhasil** (Callback URL dan Verify token sudah benar).
-- Selama app masih **Development / Unpublished**:
-  - Webhook **hanya** menerima **test event** yang Anda kirim dari dashboard Meta (tombol “Send test message” / test webhook).
-  - Pesan WhatsApp **asli dari pengguna** (production) **belum** dikirim ke URL Anda sampai app dipublish atau di-set ke mode production.
-
-**Yang bisa Anda lakukan:**
-
-1. **Untuk tes dulu (tanpa publish):**  
-   Di **WhatsApp → Configuration**, cari opsi **“Send to my webhook”** / **“Test”** / **“Send test message”**. Pakai itu untuk mengirim event uji ke URL Anda; cek apakah website Anda menerima dan menyimpan Activity (mis. cek log Vercel atau tabel `daily_activities` di Supabase).
-
-2. **Agar pesan WhatsApp sungguhan masuk ke webhook:**  
-   App harus dipindah ke **Live** / **Published** (dan memenuhi syarat Meta, mis. kebijakan privasi, penggunaan bisnis). Setelah app Live, pesan yang dikirim ke nomor WhatsApp Business Anda akan dikirim ke callback URL dan tersimpan sebagai Activity.
-
-Jadi: anggap pesan itu sebagai **informasi**, bukan kegagalan. Jika tidak ada error merah dan status webhook “Verified”, langkah Verify and Save sudah berhasil.
 
 ---
 
