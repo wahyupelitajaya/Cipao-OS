@@ -593,11 +593,11 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
       )}
 
       {activeTab === "berat" && (
-      <section>
+      <section className="w-full min-w-0">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Berat badan
         </h2>
-        <TableBox>
+        <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[560px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -736,7 +736,7 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
               })}
             </tbody>
           </table>
-        </TableBox>
+        </div>
       </section>
       )}
 
