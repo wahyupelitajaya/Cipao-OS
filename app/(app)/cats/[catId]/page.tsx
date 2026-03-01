@@ -537,7 +537,12 @@ function GroomingQuickAdd({ cat }: { cat: Cat }) {
         <DialogHeader>
           <DialogTitle>Log grooming · {cat.name}</DialogTitle>
         </DialogHeader>
-        <form action={addGroomingLog} className="space-y-3 text-sm">
+        <form
+          action={async (formData) => {
+            await addGroomingLog(formData);
+          }}
+          className="space-y-3 text-sm"
+        >
           <input type="hidden" name="cat_id" value={cat.id} />
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Tanggal</label>
