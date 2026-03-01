@@ -8,6 +8,7 @@ export const ErrorCode = {
   NOT_AUTHORIZED: "NOT_AUTHORIZED",
   VALIDATION_ERROR: "VALIDATION_ERROR",
   DB_ERROR: "DB_ERROR",
+  NOT_FOUND: "NOT_FOUND",
 } as const;
 
 export type AppErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
