@@ -22,7 +22,7 @@ import {
   PHOTO_ALLOWED_MIME_TYPES,
 } from "@/lib/constants";
 
-const DEFAULT_STATUS = "baik";
+const DEFAULT_STATUS = "observasi";
 const DEFAULT_LOCATION = "rumah";
 
 export async function createCat(formData: FormData) {
@@ -35,7 +35,7 @@ export async function createCat(formData: FormData) {
   const locationRaw = getOptionalString(formData, "location");
 
   if (statusRaw && !validateCatStatus(statusRaw)) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Baik, Kurang Baik, Sakit.");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Sehat, Membaik, Memburuk, Hampir Sembuh, Observasi, Sakit.");
   }
   if (locationRaw && !validateCatLocation(locationRaw)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Lokasi harus salah satu: Rumah, Toko, Klinik.");
@@ -126,7 +126,7 @@ export async function updateCat(formData: FormData) {
   const photoUrlRaw = getOptionalString(formData, "photo_url");
 
   if (statusRaw && !validateCatStatus(statusRaw)) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Baik, Kurang Baik, Sakit.");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Sehat, Membaik, Memburuk, Hampir Sembuh, Observasi, Sakit.");
   }
   if (locationRaw && !validateCatLocation(locationRaw)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Lokasi harus salah satu: Rumah, Toko, Klinik.");
@@ -175,16 +175,26 @@ export async function updateCat(formData: FormData) {
 
   const breedId = breedIdRaw && breedIdRaw.trim() ? breedIdRaw.trim() : null;
 
+  const updates: Record<string, unknown> = {
+    name,
+    dob,
+    status: statusRaw && validateCatStatus(statusRaw) ? statusRaw : DEFAULT_STATUS,
+    location: locationRaw && validateCatLocation(locationRaw) ? locationRaw : DEFAULT_LOCATION,
+    breed_id: breedId,
+    photo_url: photoUrl,
+  };
+  if (formData.has("treatment_notes")) {
+    const notes = getOptionalString(formData, "treatment_notes")?.trim() || null;
+    updates.treatment_notes = notes;
+  }
+  if (formData.has("is_contagious")) {
+    const v = getOptionalString(formData, "is_contagious");
+    updates.is_contagious = v === "true" ? true : v === "false" ? false : null;
+  }
+
   const { data, error } = await supabase
     .from("cats")
-    .update({
-      name,
-      dob,
-      status: statusRaw && validateCatStatus(statusRaw) ? statusRaw : DEFAULT_STATUS,
-      location: locationRaw && validateCatLocation(locationRaw) ? locationRaw : DEFAULT_LOCATION,
-      breed_id: breedId,
-      photo_url: photoUrl,
-    })
+    .update(updates)
     .eq("id", id)
     .select("id")
     .maybeSingle();
@@ -208,24 +218,32 @@ export async function bulkUpdateCats(formData: FormData) {
   const status = getOptionalString(formData, "status");
   const location = getOptionalString(formData, "location");
   const breedIdRaw = getOptionalString(formData, "breed_id");
+  const treatmentNotesRaw = getOptionalString(formData, "treatment_notes");
+  const isContagiousRaw = getOptionalString(formData, "is_contagious");
 
   if (status && !validateCatStatus(status)) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Baik, Kurang Baik, Sakit.");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Sehat, Membaik, Memburuk, Hampir Sembuh, Observasi, Sakit.");
   }
   if (location && !validateCatLocation(location)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Lokasi harus salah satu: Rumah, Toko, Klinik.");
   }
-  if (!status && !location && !breedIdRaw) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih status, lokasi, atau jenis yang akan diubah.");
+  const hasNotes = treatmentNotesRaw != null && treatmentNotesRaw.trim() !== "";
+  const hasContagious = isContagiousRaw === "true" || isContagiousRaw === "false";
+  if (!status && !location && !breedIdRaw && !hasNotes && !hasContagious) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih status, lokasi, jenis, keterangan, atau menular yang akan diubah.");
   }
 
   const breedId = breedIdRaw && breedIdRaw.trim() ? breedIdRaw.trim() : null;
+  const treatmentNotes = treatmentNotesRaw != null ? (treatmentNotesRaw.trim() || null) : null;
+  const isContagious = isContagiousRaw === "true" ? true : isContagiousRaw === "false" ? false : null;
 
   const supabase = await createSupabaseServerClient();
-  const updates: { status?: string; location?: string; breed_id?: string | null } = {};
+  const updates: { status?: string; location?: string; breed_id?: string | null; treatment_notes?: string | null; is_contagious?: boolean | null } = {};
   if (status) updates.status = status;
   if (location) updates.location = location;
   if (breedId) updates.breed_id = breedId;
+  if (treatmentNotesRaw !== undefined) updates.treatment_notes = treatmentNotes;
+  if (hasContagious) updates.is_contagious = isContagious;
 
   const { data: updatedRows, error } = await supabase
     .from("cats")
@@ -300,4 +318,26 @@ export async function acceptSuggestedStatus(formData: FormData) {
   }
 
   revalidateCat(catId);
+}
+
+export type BulkUpdateCatsState =
+  | { status: "idle" }
+  | { status: "success"; count: number }
+  | { status: "error"; message: string };
+
+export async function bulkUpdateCatsWithState(
+  _prevState: BulkUpdateCatsState,
+  formData: FormData,
+): Promise<BulkUpdateCatsState> {
+  try {
+    await bulkUpdateCats(formData);
+    const catIds = getJsonStringArray(formData, "cat_ids");
+    return { status: "success", count: catIds.length };
+  } catch (error) {
+    console.error("Bulk update cats failed", error);
+    return {
+      status: "error",
+      message: getFriendlyMessage(error),
+    };
+  }
 }

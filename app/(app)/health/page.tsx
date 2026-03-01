@@ -12,7 +12,7 @@ type Breed = Tables<"cat_breeds">;
 const SORT_BY_OPTIONS = ["name", "cat_id", "dob"] as const;
 const ORDER_OPTIONS = ["asc", "desc"] as const;
 
-const VALID_TABS = ["berat", "obatCacing", "obatKutu", "vaksin"] as const;
+const VALID_TABS = ["berat", "obatCacing", "obatKutu", "vaksin", "dirawat"] as const;
 
 interface HealthPageProps {
   searchParams?: Promise<{ q?: string; sortBy?: string; order?: string; tab?: string }>;

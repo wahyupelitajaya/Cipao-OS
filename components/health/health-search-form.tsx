@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 
-const VALID_TABS = ["berat", "obatCacing", "obatKutu", "vaksin"] as const;
+const VALID_TABS = ["berat", "obatCacing", "obatKutu", "vaksin", "dirawat"] as const;
 
 export function HealthSearchForm({ defaultValue }: { defaultValue: string }) {
   const searchParams = useSearchParams();

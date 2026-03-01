@@ -3,15 +3,18 @@
  */
 
 // --- Cat ---
-export const CAT_STATUSES = ["baik", "kurang_baik", "sakit"] as const;
+export const CAT_STATUSES = ["sehat", "membaik", "memburuk", "hampir_sembuh", "observasi", "sakit"] as const;
 export type CatStatus = (typeof CAT_STATUSES)[number];
 
 export const CAT_LOCATIONS = ["rumah", "toko", "klinik"] as const;
 export type CatLocation = (typeof CAT_LOCATIONS)[number];
 
 export const CAT_STATUS_LABELS: Record<CatStatus, string> = {
-  baik: "Baik",
-  kurang_baik: "Kurang Baik",
+  sehat: "Sehat",
+  membaik: "Membaik",
+  memburuk: "Memburuk",
+  hampir_sembuh: "Hampir Sembuh",
+  observasi: "Observasi",
   sakit: "Sakit",
 };
 

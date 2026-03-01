@@ -24,12 +24,16 @@ export type Database = {
           name: string;
           owner_id: string;
           dob: string | null;
-          status: "baik" | "kurang_baik" | "sakit" | null;
+          status: "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit" | null;
           location: "rumah" | "toko" | "klinik" | null;
           status_manual: string | null;
           is_active: boolean;
           photo_url: string | null;
           breed_id: string | null;
+          /** Catatan perawatan manual (jenis penyakit, yang merawat, dll). */
+          treatment_notes: string | null;
+          /** Apakah menular: true / false / null (belum ditentukan). */
+          is_contagious: boolean | null;
         };
       };
       cat_breeds: {

@@ -580,3 +580,48 @@ export async function bulkSetLastPreventiveDate(formData: FormData) {
     revalidateCat(id);
   }
 }
+
+/** Tandai kucing sebagai sembuh: ubah status jadi membaik & nonaktifkan log perawatan. Kucing hilang dari tab Dirawat. */
+export async function markCatsSembuh(formData: FormData) {
+  await requireAdmin();
+  const catIds = getJsonStringArray(formData, "cat_ids");
+  if (catIds.length === 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih minimal satu kucing.");
+  }
+  const supabase = await createSupabaseServerClient();
+  const { error: updateCatsError } = await supabase
+    .from("cats")
+    .update({ status: "sehat" })
+    .in("id", catIds);
+  if (updateCatsError) throw new AppError(ErrorCode.DB_ERROR, updateCatsError.message, updateCatsError);
+  const { error: updateLogsError } = await supabase
+    .from("health_logs")
+    .update({ is_active_treatment: false })
+    .in("cat_id", catIds);
+  if (updateLogsError) throw new AppError(ErrorCode.DB_ERROR, updateLogsError.message, updateLogsError);
+  revalidateHealth();
+  for (const id of catIds) revalidateCat(id);
+}
+
+/** Tambah kucing ke tab Dirawat: buat log NOTE "Dalam perawatan" dengan is_active_treatment = true. */
+export async function addCatsToDirawat(formData: FormData) {
+  await requireAdmin();
+  const catIds = getJsonStringArray(formData, "cat_ids");
+  if (catIds.length === 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih minimal satu kucing.");
+  }
+  const today = todayISO();
+  const supabase = await createSupabaseServerClient();
+  for (const catId of catIds) {
+    const { error } = await supabase.from("health_logs").insert({
+      cat_id: catId,
+      date: today,
+      type: "NOTE",
+      title: "Dalam perawatan",
+      is_active_treatment: true,
+    });
+    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  }
+  revalidateHealth();
+  for (const id of catIds) revalidateCat(id);
+}

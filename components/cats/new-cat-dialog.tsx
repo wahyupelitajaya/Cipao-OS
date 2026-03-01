@@ -12,12 +12,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createCatWithState } from "@/app/actions/cats";
+import { CAT_STATUSES, CAT_STATUS_LABELS } from "@/lib/constants";
 
-const NEW_CAT_STATUS_OPTIONS = [
-  { value: "baik", label: "Baik" },
-  { value: "kurang_baik", label: "Kurang Baik" },
-  { value: "sakit", label: "Sakit" },
-] as const;
+const NEW_CAT_STATUS_OPTIONS = CAT_STATUSES.map((value) => ({
+  value,
+  label: CAT_STATUS_LABELS[value],
+}));
 
 const NEW_CAT_LOCATION_OPTIONS = [
   { value: "rumah", label: "Rumah" },
@@ -84,6 +84,7 @@ export function NewCatDialog() {
             </label>
             <select
               name="status"
+              defaultValue="observasi"
               className="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               {NEW_CAT_STATUS_OPTIONS.map((o) => (

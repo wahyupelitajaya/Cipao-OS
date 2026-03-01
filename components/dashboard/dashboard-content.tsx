@@ -26,8 +26,11 @@ import type {
 } from "@/app/(app)/dashboard/types";
 
 const STATUS_LABEL: Record<NonNullable<CatStatus>, string> = {
-  baik: "Baik",
-  kurang_baik: "Kurang baik",
+  sehat: "Sehat",
+  membaik: "Membaik",
+  memburuk: "Memburuk",
+  hampir_sembuh: "Hampir Sembuh",
+  observasi: "Observasi",
   sakit: "Sakit",
 };
 
@@ -40,17 +43,19 @@ const LOCATION_LABEL: Record<NonNullable<CatLocation>, string> = {
 type PreventiveType = "VACCINE" | "FLEA" | "DEWORM";
 type LocationValue = "klinik" | "rumah" | "toko";
 
-/** Parses natural language query for smart dashboard search. Keyword tunggal pun langsung dipakai (mis. "sakit", "klinik", "grooming"). */
+/** Parses natural language query for smart dashboard search. Keyword tunggal pun langsung dipakai. */
 function parseSmartSearch(query: string): {
   mode:
     | "preventive"
     | "name"
     | "grooming"
     | "weight_drop"
+    | "weight_gain"
     | "sick"
     | "location"
     | "stock_empty"
-    | "stock_low";
+    | "stock_low"
+    | "healthy";
   preventiveType?: PreventiveType;
   keyword?: string;
   nameTerms?: string[];
@@ -59,7 +64,7 @@ function parseSmartSearch(query: string): {
   const q = query.trim().toLowerCase();
   if (!q) return { mode: "name", nameTerms: [] };
 
-  // ---- Stok (perlu diperiksa dulu agar "habis"/"rendah" tidak tertukar) ----
+  // ---- Stok ----
   if (q.includes("habis") || q.includes("kosong")) {
     if (q.includes("stok") || q.includes("barang") || q.length <= 12) return { mode: "stock_empty" };
   }
@@ -89,31 +94,65 @@ function parseSmartSearch(query: string): {
     if (q === "rendah" || q === "beli" || q === "dibeli") return { mode: "stock_low" };
   }
 
-  // ---- Lokasi: kata tunggal "klinik", "rumah", "toko" atau "di ..." ----
+  // ---- Lokasi ----
   if (q.includes("klinik")) return { mode: "location", locationValue: "klinik" };
   if (q.includes("toko")) return { mode: "location", locationValue: "toko" };
   if (q.includes("rumah")) return { mode: "location", locationValue: "rumah" };
 
-  // ---- Sakit: kata tunggal "sakit" atau "kurang baik" ----
-  if (q.includes("sakit") || q.includes("kurang baik")) return { mode: "sick" };
+  // ---- Dirawat / Sakit: tab Dirawat (sakit, kurang baik, atau dalam perawatan aktif) ----
+  const dirawatKeywords =
+    q.includes("dirawat") ||
+    q.includes("dalam perawatan") ||
+    q.includes("sedang dirawat") ||
+    q.includes("perawatan medis") ||
+    q.includes("perawatan aktif") ||
+    (q.includes("perawatan") && !q.includes("grooming")) ||
+    q.includes("sakit") ||
+    q.includes("kurang baik") ||
+    q === "rawat";
+  if (dirawatKeywords) return { mode: "sick" };
 
-  // ---- Grooming: "grooming" / "belum grooming" / "mandi" / "belum mandi" (sama) ----
-  if (q.includes("grooming") || q.includes("groom") || q.includes("mandi")) return { mode: "grooming" };
+  // ---- Grooming: belum mandi/grooming ----
+  if (q.includes("grooming") || q.includes("groom") || q.includes("mandi") || q.includes("belum mandi")) return { mode: "grooming" };
 
-  // ---- Berat turun: "turun" atau "berat turun" ----
-  if (q.includes("turun") && (q.includes("berat") || q.length <= 20)) return { mode: "weight_drop" };
+  // ---- Berat: turun / naik ----
+  if (q.includes("berat naik") || q === "naik") return { mode: "weight_gain" };
+  if (q.includes("turun") || q.includes("berat turun")) return { mode: "weight_drop" };
 
-  // ---- Preventif: vaksin / cacing / kutu (dengan atau tanpa "belum") ----
-  if (q.includes("vaksin") || q.includes("vaccine")) {
-    const keyword = q.includes("rabies") ? "rabies" : q.includes("triple") ? "triple" : undefined;
+  // ---- Preventif: vaksin / cacing / kutu (belum, perlu, terlambat, dll) ----
+  if (
+    q.includes("vaksin") ||
+    q.includes("vaccine") ||
+    q.includes("belum vaksin") ||
+    q.includes("perlu vaksin") ||
+    q.includes("terlambat vaksin") ||
+    q.includes("belum rabies") ||
+    q.includes("perlu rabies")
+  ) {
+    const keyword = q.includes("rabies") ? "rabies" : q.includes("triple") || q.includes("f3") || q.includes("f4") ? "triple" : undefined;
     return { mode: "preventive", preventiveType: "VACCINE", keyword };
   }
-  if (q.includes("kutu") || q.includes("flea") || q.includes("obat kutu")) {
+  if (
+    q.includes("kutu") ||
+    q.includes("flea") ||
+    q.includes("obat kutu") ||
+    q.includes("belum kutu") ||
+    q.includes("perlu obat kutu")
+  ) {
     return { mode: "preventive", preventiveType: "FLEA" };
   }
-  if (q.includes("cacing") || q.includes("deworm") || q.includes("obat cacing")) {
+  if (
+    q.includes("cacing") ||
+    q.includes("deworm") ||
+    q.includes("obat cacing") ||
+    q.includes("belum cacing") ||
+    q.includes("perlu obat cacing")
+  ) {
     return { mode: "preventive", preventiveType: "DEWORM" };
   }
+
+  // ---- Sehat: status baik ----
+  if (q === "sehat" || q === "baik") return { mode: "healthy" };
 
   const nameTerms = q.split("&").map((t) => t.trim()).filter(Boolean);
   return { mode: "name", nameTerms };
@@ -156,8 +195,31 @@ function filterCatsBySmartSearch(cats: DashboardCatRecord[], query: string): Das
         c.weight.currentKg < c.weight.previousKg,
     );
   }
+  if (parsed.mode === "weight_gain") {
+    return cats.filter(
+      (c) =>
+        c.weight.previousKg != null &&
+        c.weight.previousKg > 0 &&
+        c.weight.currentKg > c.weight.previousKg,
+    );
+  }
   if (parsed.mode === "sick") {
-    return cats.filter((c) => c.status === "sakit" || c.status === "kurang_baik");
+    return cats.filter(
+      (c) =>
+        c.status === "sakit" ||
+        c.status === "memburuk" ||
+        c.hasActiveTreatment,
+    );
+  }
+  if (parsed.mode === "healthy") {
+    return cats.filter(
+      (c) =>
+        c.status === "sehat" ||
+        c.status === "membaik" ||
+        c.status === "hampir_sembuh" ||
+        c.status === "observasi" ||
+        c.status == null,
+    );
   }
   if (parsed.mode === "location" && parsed.locationValue) {
     return cats.filter((c) => c.location === parsed.locationValue);
@@ -364,7 +426,7 @@ function buildPriorityAlerts(
         title: "Dalam perawatan",
         description: cat.name,
         date: null,
-        href: `/cats/${cat.id}?returnTo=/dashboard`,
+        href: "/health?tab=dirawat",
         photoUrl: cat.photoUrl ?? null,
       });
     }
@@ -461,13 +523,13 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
     [initialData.cats],
   );
 
-  /** Kucing yang dianggap "dalam perawatan" untuk tampilan: punya perawatan aktif ATAU status kurang_baik/sakit */
+  /** Kucing yang dianggap "dalam perawatan": punya perawatan aktif ATAU status memburuk/sakit */
   const medicalCareCats = useMemo(
     () =>
       initialData.cats.filter(
         (c) =>
           c.hasActiveTreatment ||
-          c.status === "kurang_baik" ||
+          c.status === "memburuk" ||
           c.status === "sakit",
       ),
     [initialData.cats],
@@ -484,12 +546,9 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
   );
 
   const totalCats = initialData.cats.length;
-  const sehatCount = initialData.cats.filter(
-    (c) => c.status === "baik" || c.status == null,
-  ).length;
-  const sakitCount = initialData.cats.filter(
-    (c) => c.status === "sakit" || c.status === "kurang_baik",
-  ).length;
+  /** Sakit = yang tampil di tab Dirawat (perawatan aktif / status memburuk atau sakit) */
+  const sakitCount = medicalCareCats.length;
+  const sehatCount = totalCats - sakitCount;
 
   return (
     <div className="flex flex-col gap-10">
@@ -510,7 +569,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Coba: sakit, klinik, grooming, vaksin, cacing, turun, stok habis, perlu dibeli…"
+            placeholder="Coba: sakit, dirawat, klinik, grooming, vaksin rabies, berat turun, sehat, stok habis…"
             className="max-w-md"
             aria-label="Pencarian pintar"
           />
@@ -548,9 +607,53 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
               </>
             ) : (
               <>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Hasil pencarian ({filteredCats.length} kucing)
-                </h2>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Hasil pencarian ({filteredCats.length} kucing)
+                  </h2>
+                  {parsedQuery.mode === "sick" && (
+                    <Link
+                      href="/health?tab=dirawat"
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      → Lihat di tab Dirawat
+                    </Link>
+                  )}
+                  {parsedQuery.mode === "preventive" && parsedQuery.preventiveType && (
+                    <Link
+                      href={
+                        parsedQuery.preventiveType === "VACCINE"
+                          ? "/health?tab=vaksin"
+                          : parsedQuery.preventiveType === "FLEA"
+                            ? "/health?tab=obatKutu"
+                            : "/health?tab=obatCacing"
+                      }
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      → Lihat di Health
+                    </Link>
+                  )}
+                  {parsedQuery.mode === "grooming" && (
+                    <Link href="/cats" className="text-xs font-medium text-primary hover:underline">
+                      → Lihat daftar kucing
+                    </Link>
+                  )}
+                  {(parsedQuery.mode === "weight_drop" || parsedQuery.mode === "weight_gain") && (
+                    <Link href="/health?tab=berat" className="text-xs font-medium text-primary hover:underline">
+                      → Lihat di tab Berat badan
+                    </Link>
+                  )}
+                  {parsedQuery.mode === "location" && (
+                    <Link href="/health" className="text-xs font-medium text-primary hover:underline">
+                      → Lihat di Health
+                    </Link>
+                  )}
+                  {parsedQuery.mode === "healthy" && (
+                    <Link href="/cats" className="text-xs font-medium text-primary hover:underline">
+                      → Lihat daftar kucing
+                    </Link>
+                  )}
+                </div>
                 <div className="max-h-[20rem] overflow-y-auto rounded-xl border border-border/60 bg-muted/20">
                   {filteredCats.length === 0 ? (
                     <p className="px-4 py-6 text-sm text-muted-foreground">
@@ -648,7 +751,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
         </Link>
 
         <Link
-          href="/health"
+          href="/health?tab=dirawat"
           className="rounded-xl border-l-4 border-l-[hsl(var(--status-ok))]/60 border border-border/60 bg-[hsl(var(--status-bg-ok))]/50 shadow-sm p-6 transition-colors hover:opacity-95 hover:border-[hsl(var(--status-ok)/0.3)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--status-ok)/0.3)] focus:ring-offset-2"
         >
           <p className="text-3xl font-bold tabular-nums tracking-tight text-[hsl(var(--status-ok))]">
@@ -798,7 +901,9 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
       {medicalCareCats.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Sedang Dirawat
+            <Link href="/health?tab=dirawat" className="hover:text-foreground hover:underline">
+              Sedang Dirawat
+            </Link>
           </h2>
           <div className="max-h-[20rem] overflow-y-auto rounded-xl border border-border/60 bg-[hsl(var(--status-bg-ok))]/30">
             <ul className="flex flex-col gap-1.5 p-2">
@@ -808,7 +913,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
                 return (
                   <li key={cat.id}>
                     <Link
-                      href={`/cats/${cat.id}?returnTo=/dashboard`}
+                      href="/health?tab=dirawat"
                       className="flex w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 px-3 py-2.5 transition-colors hover:bg-muted/40"
                     >
                       {cat.photoUrl ? (
@@ -829,7 +934,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground">{cat.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {cat.status && cat.status !== "baik"
+                          {cat.status && !["sehat", "membaik", "hampir_sembuh", "observasi"].includes(cat.status)
                             ? `${STATUS_LABEL[cat.status]} · ${dirawatDi}`
                             : dirawatDi}
                         </p>

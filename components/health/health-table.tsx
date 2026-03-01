@@ -5,14 +5,24 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { bulkSetLastPreventiveDate, bulkSetNextDueDate, bulkAddWeightLog, checkExistingPreventiveLogs } from "@/app/actions/logs";
+import { bulkSetLastPreventiveDate, bulkSetNextDueDate, bulkAddWeightLog, checkExistingPreventiveLogs, markCatsSembuh, addCatsToDirawat } from "@/app/actions/logs";
 import { getFriendlyMessage } from "@/lib/errors";
 import { SetNextDueDialog } from "@/components/health/set-next-due-dialog";
 import { SetLastDateDialog } from "@/components/health/set-last-date-dialog";
 import { EditWeightLogDialog } from "@/components/health/edit-weight-log-dialog";
 import { DeleteWeightLogButton } from "@/components/health/delete-weight-log-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { EditCatDirawatDialog } from "@/components/cats/edit-cat-dirawat-dialog";
+import { BulkEditDirawatDialog } from "@/components/cats/bulk-edit-dirawat-dialog";
 import { parseLocalDateString } from "@/lib/dates";
+import { CAT_STATUS_LABELS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type { Tables } from "@/lib/types";
 import type { StatusSuggestion } from "@/lib/cat-status";
 
@@ -56,6 +66,38 @@ function formatDateShort(date: Date): string {
     month: "short",
     year: "numeric",
   });
+}
+
+/** Capsule styles untuk tampilan mewah & soft di tabel health */
+const CAPSULE = {
+  /** Naik / Aman / positif */
+  ok: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/80",
+  /** Turun / perhatian */
+  warning: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80",
+  /** Terlambat / sakit */
+  overdue: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200/80",
+  /** Due soon / kurang baik */
+  dueSoon: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/80",
+  /** Netral / belum dijadwalkan / sama */
+  neutral: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200/80",
+  /** Tanggal / info sekunder */
+  date: "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100/80 text-slate-600 border border-slate-200/60",
+} as const;
+
+/** Jenis vaksin → label tampilan + kelas kapsul (F3, F4, Rabies mudah dibedakan). */
+function getVaccineTypeCapsule(title: string | null | undefined): { label: string; capsuleClass: string } {
+  const t = title?.trim().toUpperCase() ?? "";
+  if (t === "F3") {
+    return { label: "F3", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-sky-50 text-sky-800 border border-sky-200/80" };
+  }
+  if (t === "F4") {
+    return { label: "F4", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-violet-50 text-violet-800 border border-violet-200/80" };
+  }
+  if (t === "RABIES") {
+    return { label: "Rabies", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80" };
+  }
+  const fallback = title?.trim() || "—";
+  return { label: fallback, capsuleClass: CAPSULE.neutral };
 }
 
 function formatAge(dob: string | null | undefined): string {
@@ -147,21 +189,21 @@ function PreventiveCell({
     ? `Next: ${formatDateShort(new Date(nextDue))}`
     : "—";
 
-  const nextClass = nextDue
+  const nextCapsuleClass = nextDue
     ? isOverdue(nextDue)
-      ? "text-[hsl(var(--status-overdue))]"
+      ? CAPSULE.overdue
       : isDueWithin7Days(nextDue)
-        ? "text-[hsl(var(--status-due-soon))]"
-        : "text-muted-foreground"
-    : "text-muted-foreground";
+        ? CAPSULE.dueSoon
+        : CAPSULE.ok
+    : CAPSULE.neutral;
 
   return (
-    <div className="min-w-0 space-y-0.5 text-[11px] leading-tight">
+    <div className="min-w-0 space-y-1.5 text-[11px] leading-tight">
       {showJenis && (
         <div className="font-medium text-foreground">{jenis}</div>
       )}
-      <div className="flex items-center gap-1 text-muted-foreground">
-        <span>{lastLine}</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={CAPSULE.date}>{lastLine}</span>
         {admin && log && (
           <SetLastDateDialog
             logId={log.id}
@@ -173,8 +215,8 @@ function PreventiveCell({
           />
         )}
       </div>
-      <div className={`flex items-center gap-1 ${nextClass}`}>
-        <span>{nextLine}</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={nextCapsuleClass}>{nextLine}</span>
         {admin && (
           <SetNextDueDialog
             catId={catId}
@@ -231,7 +273,7 @@ function StatusBadge({
   );
 }
 
-type SectionKey = "berat" | "obatCacing" | "obatKutu" | "vaksin";
+type SectionKey = "berat" | "obatCacing" | "obatKutu" | "vaksin" | "dirawat";
 
 export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: HealthTableProps) {
   const breedsById = new Map(breeds.map((b) => [b.id, b]));
@@ -242,6 +284,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
   const [selectedIdsObatCacing, setSelectedIdsObatCacing] = useState<Set<string>>(new Set());
   const [selectedIdsObatKutu, setSelectedIdsObatKutu] = useState<Set<string>>(new Set());
   const [selectedIdsVaksin, setSelectedIdsVaksin] = useState<Set<string>>(new Set());
+  const [selectedIdsDirawat, setSelectedIdsDirawat] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<SectionKey>(initialTab);
   useEffect(() => {
     setActiveTab(initialTab);
@@ -267,6 +310,15 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
   const [pendingBulkAction, setPendingBulkAction] = useState<{ section: "obatCacing" | "obatKutu" | "vaksin"; action: "last" | "next" } | null>(null);
   /** Pesan sukses setelah simpan (per section+action), hilang setelah beberapa detik */
   const [savedFeedback, setSavedFeedback] = useState<{ section: "obatCacing" | "obatKutu" | "vaksin"; action: "last" | "next" } | null>(null);
+  /** Tab Dirawat: id kucing yang sedang diedit (dialog edit per kucing) */
+  const [editingDirawatCatId, setEditingDirawatCatId] = useState<string | null>(null);
+  /** Tab Dirawat: dialog bulk edit untuk kucing terpilih */
+  const [bulkEditDirawatOpen, setBulkEditDirawatOpen] = useState(false);
+  /** Tab Dirawat: konfirmasi tandai sembuh */
+  const [sembuhConfirmIds, setSembuhConfirmIds] = useState<string[] | null>(null);
+  /** Tab Dirawat: dialog tambah kucing ke Dirawat */
+  const [addToDirawatOpen, setAddToDirawatOpen] = useState(false);
+  const [addToDirawatSelected, setAddToDirawatSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!savedFeedback) return;
@@ -286,6 +338,8 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
         return selectedIdsObatKutu;
       case "vaksin":
         return selectedIdsVaksin;
+      case "dirawat":
+        return selectedIdsDirawat;
     }
   }
 
@@ -303,6 +357,9 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
         break;
       case "vaksin":
         setSelectedIdsVaksin(updater);
+        break;
+      case "dirawat":
+        setSelectedIdsDirawat(updater);
         break;
     }
   }
@@ -458,6 +515,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
     { key: "obatCacing", label: "Obat cacing" },
     { key: "obatKutu", label: "Obat kutu" },
     { key: "vaksin", label: "Vaksin" },
+    { key: "dirawat", label: "Dirawat" },
   ];
 
   function handleTabChange(key: SectionKey) {
@@ -475,6 +533,9 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
         break;
       case "vaksin":
         setSelectedIdsVaksin(new Set());
+        break;
+      case "dirawat":
+        setSelectedIdsDirawat(new Set());
         break;
     }
     setActiveTab(key);
@@ -500,6 +561,27 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
         confirmLabel="Ya, simpan"
         cancelLabel="Batal"
         onConfirm={handleReplaceConfirm}
+      />
+      <ConfirmDialog
+        open={sembuhConfirmIds !== null}
+        onOpenChange={(open) => { if (!open) setSembuhConfirmIds(null); }}
+        title="Tandai sebagai sembuh"
+        description={
+          sembuhConfirmIds?.length
+            ? `${sembuhConfirmIds.length} kucing akan dihapus dari daftar Dirawat. Status diubah ke Membaik dan log perawatan dinonaktifkan.`
+            : ""
+        }
+        confirmLabel="Ya, tandai sembuh"
+        cancelLabel="Batal"
+        onConfirm={async () => {
+          if (!sembuhConfirmIds?.length) return;
+          const fd = new FormData();
+          fd.set("cat_ids", JSON.stringify(sembuhConfirmIds));
+          await markCatsSembuh(fd);
+          router.refresh();
+          setSelectedIdsDirawat(new Set());
+          setSembuhConfirmIds(null);
+        }}
       />
       {/* Tab + kontrol tampilan */}
       <div className="flex flex-wrap items-center gap-3">
@@ -739,8 +821,10 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
 
       {activeTab === "berat" && (
       <section className="w-full min-w-0">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Berat badan
+        <h2 className="mb-3">
+          <span className="inline-flex rounded-full border border-slate-200/80 bg-slate-100/80 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-slate-700 shadow-sm">
+            Berat badan
+          </span>
         </h2>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[560px] w-full text-sm">
@@ -793,14 +877,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                       <CatCell cat={row.cat} />
                     </td>
                     <td className="px-5 py-3 align-middle text-center">
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-col gap-1 items-center">
                         <span
                           className={
                             trendLabel === "Naik"
-                              ? "text-xs font-medium text-green-600"
+                              ? CAPSULE.ok
                               : trendLabel === "Turun"
-                                ? "text-xs font-medium text-amber-600"
-                                : "text-xs text-muted-foreground"
+                                ? CAPSULE.warning
+                                : trendLabel === "Sama"
+                                  ? CAPSULE.neutral
+                                  : "text-xs text-muted-foreground"
                           }
                         >
                           {trendLabel}
@@ -812,13 +898,13 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3 align-middle text-right text-[11px] tabular-nums text-muted-foreground">
+                    <td className="px-5 py-3 align-middle text-right text-[11px] tabular-nums">
                       {row.suggestion.lastWeight && row.lastWeightLogId ? (
-                        <div className="flex flex-col items-end gap-0.5">
-                          <div>{Number(row.suggestion.lastWeight.weightKg).toFixed(2)} kg</div>
-                          <div className="text-[10px] font-normal">
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="font-medium text-foreground">{Number(row.suggestion.lastWeight.weightKg).toFixed(2)} kg</span>
+                          <span className={CAPSULE.date}>
                             {formatDateShort(new Date(row.suggestion.lastWeight.date))}
-                          </div>
+                          </span>
                           {admin && (
                             <div className="flex items-center gap-2">
                               <EditWeightLogDialog
@@ -845,11 +931,11 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                         "—"
                       )}
                     </td>
-                    <td className="px-5 py-3 align-middle text-right text-[11px] tabular-nums text-muted-foreground">
+                    <td className="px-5 py-3 align-middle text-right text-[11px] tabular-nums">
                       {row.previousWeight ? (
-                        <div className="flex flex-col items-end gap-0.5">
-                          <div>{Number(row.previousWeight.weightKg).toFixed(2)} kg</div>
-                          <div className="text-[10px] font-normal">{formatDateShort(new Date(row.previousWeight.date))}</div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="font-medium text-foreground">{Number(row.previousWeight.weightKg).toFixed(2)} kg</span>
+                          <span className={CAPSULE.date}>{formatDateShort(new Date(row.previousWeight.date))}</span>
                           {admin && (
                             <div className="flex items-center gap-2">
                               <EditWeightLogDialog
@@ -887,8 +973,10 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
 
       {activeTab === "obatCacing" && (
       <section className="w-full min-w-0">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Obat cacing
+        <h2 className="mb-3">
+          <span className="inline-flex rounded-full border border-emerald-200/80 bg-emerald-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-emerald-800 shadow-sm">
+            Obat cacing
+          </span>
         </h2>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
@@ -934,15 +1022,17 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                       <CatCell cat={row.cat} />
                     </td>
                     <td className="px-5 py-3 align-middle">
-                      <div className="space-y-0.5 text-[11px]">
-                        <div className={status === "Terlambat" ? "font-medium text-red-600" : status === "Aman" ? "font-medium text-green-600" : "text-muted-foreground"}>
+                      <div className="flex flex-col gap-1">
+                        <span className={status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral}>
                           {status}
-                        </div>
-                        <div className="text-muted-foreground">{keterangan}</div>
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{keterangan}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 align-middle text-[11px] font-medium text-foreground">
-                      {row.lastDewormLog?.title?.trim() || "—"}
+                    <td className="px-5 py-3 align-middle">
+                      <span className={CAPSULE.neutral}>
+                        {row.lastDewormLog?.title?.trim() || "—"}
+                      </span>
                     </td>
                     <td className="px-5 py-3 align-middle">
                       <PreventiveCell
@@ -965,8 +1055,10 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
 
       {activeTab === "obatKutu" && (
       <section className="w-full min-w-0">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Obat kutu
+        <h2 className="mb-3">
+          <span className="inline-flex rounded-full border border-sky-200/80 bg-sky-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-sky-800 shadow-sm">
+            Obat kutu
+          </span>
         </h2>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
@@ -1012,15 +1104,17 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                       <CatCell cat={row.cat} />
                     </td>
                     <td className="px-5 py-3 align-middle">
-                      <div className="space-y-0.5 text-[11px]">
-                        <div className={status === "Terlambat" ? "font-medium text-red-600" : status === "Aman" ? "font-medium text-green-600" : "text-muted-foreground"}>
+                      <div className="flex flex-col gap-1">
+                        <span className={status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral}>
                           {status}
-                        </div>
-                        <div className="text-muted-foreground">{keterangan}</div>
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{keterangan}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 align-middle text-[11px] font-medium text-foreground">
-                      {row.lastFleaLog?.title?.trim() || "—"}
+                    <td className="px-5 py-3 align-middle">
+                      <span className={CAPSULE.neutral}>
+                        {row.lastFleaLog?.title?.trim() || "—"}
+                      </span>
                     </td>
                     <td className="px-5 py-3 align-middle">
                       <PreventiveCell
@@ -1043,8 +1137,10 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
 
       {activeTab === "vaksin" && (
       <section className="w-full min-w-0">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Vaksin
+        <h2 className="mb-3">
+          <span className="inline-flex rounded-full border border-violet-200/80 bg-violet-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-violet-800 shadow-sm">
+            Vaksin
+          </span>
         </h2>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
@@ -1090,15 +1186,18 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                       <CatCell cat={row.cat} />
                     </td>
                     <td className="px-5 py-3 align-middle">
-                      <div className="space-y-0.5 text-[11px]">
-                        <div className={status === "Terlambat" ? "font-medium text-red-600" : status === "Aman" ? "font-medium text-green-600" : "text-muted-foreground"}>
+                      <div className="flex flex-col gap-1">
+                        <span className={status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral}>
                           {status}
-                        </div>
-                        <div className="text-muted-foreground">{keterangan}</div>
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{keterangan}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 align-middle text-[11px] font-medium text-foreground">
-                      {row.lastVaccineLog?.title?.trim() || "—"}
+                    <td className="px-5 py-3 align-middle">
+                      {(() => {
+                        const { label, capsuleClass } = getVaccineTypeCapsule(row.lastVaccineLog?.title);
+                        return <span className={capsuleClass}>{label}</span>;
+                      })()}
                     </td>
                     <td className="px-5 py-3 align-middle">
                       <PreventiveCell
@@ -1118,6 +1217,314 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
         </div>
       </section>
       )}
+
+      {activeTab === "dirawat" && (() => {
+        const dirawatRows = rows.filter(
+          (row) =>
+            row.suggestion.reasons.some((r) => r.includes("Sedang dalam perawatan aktif")) ||
+            row.cat.status === "sakit" ||
+            row.cat.status === "memburuk",
+        );
+        const dirawatIds = dirawatRows.map((r) => r.cat.id);
+        const allDirawatSelected =
+          dirawatIds.length > 0 && dirawatIds.every((id) => selectedIdsDirawat.has(id));
+        const statusLabel = (s: string | null) => (s ? CAT_STATUS_LABELS[s as keyof typeof CAT_STATUS_LABELS] ?? s : "");
+        const colSpan = admin ? 7 : 6;
+        return (
+          <section className="w-full min-w-0 space-y-3">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <h2 className="sr-only">Dirawat</h2>
+              <span className="inline-flex rounded-full border border-amber-200/80 bg-amber-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-amber-800 shadow-sm">
+                Dirawat
+              </span>
+              {admin && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAddToDirawatSelected(new Set());
+                    setAddToDirawatOpen(true);
+                  }}
+                >
+                  Tambah kucing
+                </Button>
+              )}
+            </div>
+            {admin && selectedIdsDirawat.size > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+                <span className="text-sm text-muted-foreground">
+                  {selectedIdsDirawat.size} kucing dipilih
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIdsDirawat(new Set())}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={() => setSembuhConfirmIds(Array.from(selectedIdsDirawat))}
+                >
+                  Sembuh
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (selectedIdsDirawat.size === 1) {
+                      setEditingDirawatCatId(Array.from(selectedIdsDirawat)[0]!);
+                    } else {
+                      setBulkEditDirawatOpen(true);
+                    }
+                  }}
+                >
+                  Edit
+                </Button>
+              </div>
+            )}
+            <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
+              <table className="min-w-[700px] w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {admin && (
+                      <th className="w-10 px-2 py-3 text-left">
+                        <label className="flex cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={allDirawatSelected}
+                            onChange={() =>
+                              setSelectedIdsDirawat(allDirawatSelected ? new Set() : new Set(dirawatIds))
+                            }
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          <span className="sr-only">Pilih semua (dirawat)</span>
+                        </label>
+                      </th>
+                    )}
+                    <th className="px-5 py-3 text-left">Cat</th>
+                    <th className="min-w-[10rem] px-5 py-3 text-left">Kondisi</th>
+                    <th className="min-w-[6rem] px-5 py-3 text-left">Lokasi</th>
+                    <th className="min-w-[6rem] px-5 py-3 text-left">Menular</th>
+                    <th className="min-w-[10rem] px-5 py-3 text-left">Keterangan</th>
+                    <th className="w-20 px-5 py-3 text-right">Edit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dirawatRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={colSpan} className="px-5 py-8 text-center text-muted-foreground">
+                        Tidak ada kucing yang sedang dalam perawatan.
+                      </td>
+                    </tr>
+                  ) : (
+                    dirawatRows.map((row) => {
+                      const kondisi =
+                        row.suggestion.reasons.length > 0
+                          ? row.suggestion.reasons.join(" · ")
+                          : statusLabel(row.cat.status) || "—";
+                      const st = row.cat.status;
+                      const statusCapsuleClass: Record<string, string> = {
+                        sehat: "bg-emerald-100 text-emerald-800 border border-emerald-200/80",
+                        membaik: "bg-green-100 text-green-800 border border-green-200/80",
+                        hampir_sembuh: "bg-teal-100 text-teal-800 border border-teal-200/80",
+                        observasi: "bg-slate-100 text-slate-700 border border-slate-200/80",
+                        memburuk: "bg-amber-100 text-amber-800 border border-amber-200/80",
+                        sakit: "bg-rose-100 text-rose-800 border border-rose-200/80",
+                      };
+                      const kondisiEl =
+                        st && statusCapsuleClass[st] ? (
+                          <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", statusCapsuleClass[st])}>
+                            {statusLabel(st)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">{kondisi}</span>
+                        );
+                      const lokasiEl =
+                        row.cat.location === "rumah" ? (
+                          <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200/80">
+                            Rumah
+                          </span>
+                        ) : row.cat.location === "toko" ? (
+                          <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-sky-100 text-sky-800 border border-sky-200/80">
+                            Toko
+                          </span>
+                        ) : row.cat.location === "klinik" ? (
+                          <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-violet-100 text-violet-800 border border-violet-200/80">
+                            Klinik
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200/80">
+                            —
+                          </span>
+                        );
+                      const manualNotes = row.cat.treatment_notes?.trim() || null;
+                      const systemReasons =
+                        row.suggestion.reasons.length > 0 ? row.suggestion.reasons.join(" · ") : "";
+                      const keterangan =
+                        [manualNotes, systemReasons].filter(Boolean).join(" · ") || "—";
+                      return (
+                        <tr key={row.cat.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
+                          {admin && (
+                            <td className="px-2 py-3 align-middle">
+                              <label className="flex cursor-pointer items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIdsDirawat.has(row.cat.id)}
+                                  onChange={() => toggleOne("dirawat", row.cat.id)}
+                                  className="h-4 w-4 rounded border-input"
+                                />
+                              </label>
+                            </td>
+                          )}
+                          <td className="px-5 py-3 align-middle">
+                            <CatCell cat={row.cat} />
+                          </td>
+                          <td className="px-5 py-3 align-middle text-xs">
+                            {kondisiEl}
+                          </td>
+                          <td className="px-5 py-3 align-middle text-xs">
+                            {lokasiEl}
+                          </td>
+                          <td className="px-5 py-3 align-middle text-xs">
+                            {row.cat.is_contagious === true ? (
+                              <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-rose-100 text-rose-800 border border-rose-200/80">
+                                Menular
+                              </span>
+                            ) : row.cat.is_contagious === false ? (
+                              <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200/80">
+                                Tidak menular
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200/80">
+                                —
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 align-middle text-xs">
+                            {keterangan !== "—" ? (
+                              <span className="inline-flex max-w-[12rem] rounded-lg border border-slate-200/60 bg-slate-50/80 px-2.5 py-1 text-slate-600">
+                                {keterangan}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 align-middle text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingDirawatCatId(row.cat.id)}
+                            >
+                              Edit
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <EditCatDirawatDialog
+              open={editingDirawatCatId !== null}
+              onOpenChange={(open) => !open && setEditingDirawatCatId(null)}
+              cat={rows.find((r) => r.cat.id === editingDirawatCatId)?.cat ?? null}
+              breeds={breeds}
+              onSuccess={() => {
+                router.refresh();
+                setEditingDirawatCatId(null);
+              }}
+            />
+            <BulkEditDirawatDialog
+              open={bulkEditDirawatOpen}
+              onOpenChange={setBulkEditDirawatOpen}
+              catIds={Array.from(selectedIdsDirawat)}
+              breeds={breeds.map((b) => ({ id: b.id, name: b.name }))}
+              onSuccess={() => {
+                router.refresh();
+                setBulkEditDirawatOpen(false);
+                setSelectedIdsDirawat(new Set());
+              }}
+            />
+            <Dialog open={addToDirawatOpen} onOpenChange={(open) => { setAddToDirawatOpen(open); if (!open) setAddToDirawatSelected(new Set()); }}>
+              <DialogContent className="max-h-[85vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle>Tambah kucing ke Dirawat</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  Pilih kucing yang akan ditambahkan ke daftar Dirawat (log &quot;Dalam perawatan&quot; akan dibuat).
+                </p>
+                {(() => {
+                  const notInDirawat = rows.filter((r) => !dirawatIds.includes(r.cat.id));
+                  if (notInDirawat.length === 0) {
+                    return <p className="text-sm text-muted-foreground py-4">Semua kucing sudah ada di daftar Dirawat.</p>;
+                  }
+                  return (
+                    <div className="flex flex-col gap-2 min-h-0 overflow-auto py-2">
+                      {notInDirawat.map((row) => (
+                        <label key={row.cat.id} className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2 hover:bg-muted/30 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={addToDirawatSelected.has(row.cat.id)}
+                            onChange={() => {
+                              setAddToDirawatSelected((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(row.cat.id)) next.delete(row.cat.id);
+                                else next.add(row.cat.id);
+                                return next;
+                              });
+                            }}
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span className="font-medium">{row.cat.name}</span>
+                            <span className="text-xs text-muted-foreground ml-1">
+                              {[breedsById.get(row.cat.breed_id ?? "")?.name ?? "—", formatAge(row.cat.dob)].filter(Boolean).join(" | ")}
+                            </span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })()}
+                <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setAddToDirawatOpen(false); setAddToDirawatSelected(new Set()); }}
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={addToDirawatSelected.size === 0}
+                    onClick={async () => {
+                      if (addToDirawatSelected.size === 0) return;
+                      const fd = new FormData();
+                      fd.set("cat_ids", JSON.stringify(Array.from(addToDirawatSelected)));
+                      await addCatsToDirawat(fd);
+                      router.refresh();
+                      setAddToDirawatOpen(false);
+                      setAddToDirawatSelected(new Set());
+                    }}
+                  >
+                    Tambah ({addToDirawatSelected.size})
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </section>
+        );
+      })()}
         </div>
       </div>
     </div>

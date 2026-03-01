@@ -10,16 +10,15 @@ import { bulkUpdateCats, deleteCat } from "@/app/actions/cats";
 import { getFriendlyMessage } from "@/lib/errors";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Tables } from "@/lib/types";
+import { CAT_STATUSES, CAT_STATUS_LABELS } from "@/lib/constants";
 
 type Cat = Tables<"cats">;
 type Breed = Tables<"cat_breeds">;
 
 const STATUS_OPTIONS = [
   { value: "", label: "—" },
-  { value: "baik", label: "Baik" },
-  { value: "kurang_baik", label: "Kurang Baik" },
-  { value: "sakit", label: "Sakit" },
-] as const;
+  ...CAT_STATUSES.map((value) => ({ value, label: CAT_STATUS_LABELS[value] })),
+];
 
 const LOCATION_OPTIONS = [
   { value: "", label: "—" },
@@ -32,6 +31,8 @@ interface CatsTableProps {
   cats: Cat[];
   breeds: Breed[];
   admin: boolean;
+  /** Id kucing yang punya perawatan aktif (muncul di tab Dirawat). Jika tidak di list ini = dianggap sehat. */
+  activeTreatmentCatIds?: string[];
 }
 
 function formatDob(dob: string | null | undefined): string {
@@ -98,11 +99,24 @@ function LocationBadge({ location }: { location: Cat["location"] }) {
   );
 }
 
-function StatusBadge({ status }: { status: Cat["status"] }) {
-  const label = statusLabel(status);
-  if (!status) return <span className="text-xs text-muted-foreground">—</span>;
-  const variant = status === "sakit" ? "sakit" : status === "kurang_baik" ? "kurang_baik" : "baik";
-  return <Badge variant={variant}>{label}</Badge>;
+function StatusBadge({
+  cat,
+  activeTreatmentCatIds,
+}: {
+  cat: { id: string; status: Cat["status"] };
+  activeTreatmentCatIds?: Set<string>;
+}) {
+  const inDirawat =
+    activeTreatmentCatIds?.has(cat.id) ||
+    cat.status === "sakit" ||
+    cat.status === "memburuk";
+  const displayStatus = inDirawat ? (cat.status ?? "sehat") : "sehat";
+  const label = statusLabel(displayStatus);
+  const variant =
+    ["sehat", "membaik", "memburuk", "hampir_sembuh", "observasi", "sakit"].includes(displayStatus)
+      ? displayStatus
+      : "sehat";
+  return <Badge variant={variant as "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit"}>{label}</Badge>;
 }
 
 function BreedCountSummary({
@@ -140,7 +154,7 @@ function BreedCountSummary({
   );
 }
 
-export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
+export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [] }: CatsTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -151,6 +165,7 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const breedsById = new Map(breeds.map((b) => [b.id, b]));
+  const activeTreatmentSet = new Set(activeTreatmentCatIds);
   const catToDelete = confirmDeleteId ? cats.find((c) => c.id === confirmDeleteId) : null;
 
   const allIds = cats.map((c) => c.id);
@@ -378,7 +393,7 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
                   {formatDob(cat.dob)}
                 </td>
                 <td className="px-4 py-3 align-middle hidden sm:table-cell">
-                  <StatusBadge status={cat.status} />
+                  <StatusBadge cat={cat} activeTreatmentCatIds={activeTreatmentSet} />
                 </td>
                 <td className="px-4 py-3 align-middle hidden sm:table-cell">
                   <LocationBadge location={cat.location} />

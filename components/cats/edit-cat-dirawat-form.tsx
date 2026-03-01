@@ -1,10 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import type { Tables } from "@/lib/types";
 import { updateCatWithState } from "@/app/actions/cats";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CAT_STATUSES, CAT_LOCATIONS, CAT_STATUS_LABELS, CAT_LOCATION_LABELS } from "@/lib/constants";
 
@@ -35,53 +35,30 @@ function formatDateForInput(dateStr: string | null | undefined): string {
   }
 }
 
-interface EditCatFormProps {
+interface EditCatDirawatFormProps {
   cat: Cat;
   breeds: Breed[];
+  onSuccess?: () => void;
 }
 
-export function EditCatForm({ cat, breeds }: EditCatFormProps) {
+export function EditCatDirawatForm({ cat, breeds, onSuccess }: EditCatDirawatFormProps) {
   const [state, formAction] = useActionState<UpdateCatState, FormData>(
     updateCatWithState,
     initialState,
   );
 
+  useEffect(() => {
+    if (state.status === "success" && onSuccess) {
+      onSuccess();
+    }
+  }, [state.status, onSuccess]);
+
   return (
     <form action={formAction} className="space-y-3 text-sm">
       <input type="hidden" name="id" value={cat.id} />
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">
-          Name
-        </label>
-        <Input name="name" defaultValue={cat.name} required />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">
-          DoB (optional)
-        </label>
-        <Input
-          name="dob"
-          type="date"
-          defaultValue={formatDateForInput(cat.dob)}
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">
-          Jenis kucing
-        </label>
-        <select
-          name="breed_id"
-          className={selectClass}
-          defaultValue={cat.breed_id ?? ""}
-        >
-          <option value="">— Tidak ada —</option>
-          {breeds.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <input type="hidden" name="name" value={cat.name} />
+      <input type="hidden" name="dob" value={formatDateForInput(cat.dob)} />
+      <input type="hidden" name="photo_url" value={cat.photo_url ?? ""} />
       <div className="space-y-1">
         <label className="text-xs font-medium text-muted-foreground">
           Status
@@ -116,31 +93,48 @@ export function EditCatForm({ cat, breeds }: EditCatFormProps) {
       </div>
       <div className="space-y-1">
         <label className="text-xs font-medium text-muted-foreground">
-          Foto kucing
+          Menular
         </label>
-        <div className="rounded-xl border border-input bg-background px-3 py-2">
-          <input
-            type="file"
-            name="photo"
-            accept="image/jpeg,image/png,image/gif,image/webp"
-            className="w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium"
-          />
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          Upload dari perangkat (maks. 5MB, JPG/PNG/GIF/WebP). Jika diisi, akan dipakai menggantikan URL di bawah.
-        </p>
-        <div className="pt-1">
-          <label className="text-[11px] font-medium text-muted-foreground">
-            Atau isi URL foto (jika sudah ada di internet)
-          </label>
-          <Input
-            name="photo_url"
-            type="url"
-            placeholder="https://..."
-            defaultValue={cat.photo_url ?? ""}
-            className="mt-0.5 rounded-xl"
-          />
-        </div>
+        <select
+          name="is_contagious"
+          className={selectClass}
+          defaultValue={
+            cat.is_contagious === true ? "true" : cat.is_contagious === false ? "false" : ""
+          }
+        >
+          <option value="">Tidak ditentukan</option>
+          <option value="true">Ya, menular</option>
+          <option value="false">Tidak menular</option>
+        </select>
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-muted-foreground">
+          Jenis kucing
+        </label>
+        <select
+          name="breed_id"
+          className={selectClass}
+          defaultValue={cat.breed_id ?? ""}
+        >
+          <option value="">— Tidak ada —</option>
+          {breeds.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-muted-foreground">
+          Keterangan (opsional)
+        </label>
+        <textarea
+          name="treatment_notes"
+          rows={3}
+          placeholder="Contoh: Jenis penyakit, siapa yang merawat, lokasi perawatan, catatan lain…"
+          defaultValue={cat.treatment_notes ?? ""}
+          className="flex w-full rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y min-h-[4rem]"
+        />
       </div>
 
       {state.status === "success" && (
@@ -165,8 +159,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" size="sm" disabled={pending}>
-      {pending ? "Menyimpan..." : "Save changes"}
+      {pending ? "Menyimpan..." : "Simpan"}
     </Button>
   );
 }
-

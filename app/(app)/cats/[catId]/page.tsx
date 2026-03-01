@@ -21,17 +21,14 @@ import { DeleteCatButton } from "@/components/cats/delete-cat-button";
 import { HealthLogListItem } from "@/components/cats/health-log-list-item";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { CAT_STATUS_LABELS } from "@/lib/constants";
 
 type Cat = Tables<"cats">;
 type HealthLog = Tables<"health_logs">;
 type WeightLog = Tables<"weight_logs">;
 type GroomingLog = Tables<"grooming_logs">;
 
-const STATUS_LABELS: Record<string, string> = {
-  baik: "Baik",
-  kurang_baik: "Kurang Baik",
-  sakit: "Sakit",
-};
+const STATUS_LABELS: Record<string, string> = { ...CAT_STATUS_LABELS };
 
 const LOCATION_LABELS: Record<string, string> = {
   rumah: "Rumah",
@@ -211,19 +208,15 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {c.name}
             </h1>
-            {c.status && (
-              <Badge
-                variant={
-                  c.status === "sakit"
-                    ? "sakit"
-                    : c.status === "kurang_baik"
-                      ? "kurang_baik"
-                      : "baik"
-                }
-              >
-                {STATUS_LABELS[c.status] ?? c.status}
-              </Badge>
-            )}
+            <Badge
+              variant={
+                ["sehat", "membaik", "memburuk", "hampir_sembuh", "observasi", "sakit"].includes(c.status ?? "sehat")
+                  ? ((c.status ?? "sehat") as "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit")
+                  : "sehat"
+              }
+            >
+              {STATUS_LABELS[c.status ?? "sehat"] ?? (c.status ?? "Sehat")}
+            </Badge>
             <Badge variant={statusVariant}>{suggestionLabel}</Badge>
             {admin && (
               <>

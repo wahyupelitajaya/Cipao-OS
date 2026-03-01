@@ -66,6 +66,12 @@ export default async function CatsPage(props: CatsPageProps) {
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
 
+  const { data: activeTreatmentRows = [] } = await supabase
+    .from("health_logs")
+    .select("cat_id")
+    .eq("is_active_treatment", true);
+  const activeTreatmentCatIds = (activeTreatmentRows as { cat_id: string }[]).map((r) => r.cat_id);
+
   const admin = isAdmin(profile);
 
   const paginationSearchParams: Record<string, string> = {};
@@ -102,7 +108,7 @@ export default async function CatsPage(props: CatsPageProps) {
         </div>
       </header>
 
-      <CatsTable cats={(cats ?? []) as Cat[]} breeds={(breeds ?? []) as Breed[]} admin={admin} />
+      <CatsTable cats={(cats ?? []) as Cat[]} breeds={(breeds ?? []) as Breed[]} admin={admin} activeTreatmentCatIds={activeTreatmentCatIds} />
 
       <PaginationBar
         totalCount={totalCount ?? 0}
