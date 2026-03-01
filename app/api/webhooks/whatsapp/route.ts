@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 
 /**
  * GET: Verifikasi webhook Meta.
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
 
     const today = new Date().toISOString().slice(0, 10);
     const timeSlot = getTimeSlot();
+    let saved = 0;
 
     for (const entry of body.entry) {
       const changes = entry.changes;
@@ -75,7 +77,7 @@ export async function POST(req: NextRequest) {
           try {
             const { createSupabaseAdminClient } = await import("@/lib/supabaseAdmin");
             const supabase = createSupabaseAdminClient();
-            await supabase.from("daily_activities").insert({
+            const { error } = await supabase.from("daily_activities").insert({
               date: today,
               time_slots: [timeSlot],
               locations: ["Rumah"],
@@ -85,12 +87,16 @@ export async function POST(req: NextRequest) {
               note,
               created_by: null,
             });
+            if (!error) saved++;
+            else console.error("[WhatsApp webhook] insert error:", error.message);
           } catch (e) {
             console.error("[WhatsApp webhook] insert error:", e);
           }
         }
       }
     }
+
+    if (saved > 0) revalidatePath("/activity");
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: true }, { status: 200 });
