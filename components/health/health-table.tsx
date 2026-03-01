@@ -9,6 +9,8 @@ import { bulkSetLastPreventiveDate, bulkSetNextDueDate, bulkAddWeightLog } from 
 import { getFriendlyMessage } from "@/lib/errors";
 import { SetNextDueDialog } from "@/components/health/set-next-due-dialog";
 import { SetLastDateDialog } from "@/components/health/set-last-date-dialog";
+import { EditWeightLogDialog } from "@/components/health/edit-weight-log-dialog";
+import { DeleteWeightLogButton } from "@/components/health/delete-weight-log-button";
 import type { Tables } from "@/lib/types";
 import type { StatusSuggestion } from "@/lib/cat-status";
 
@@ -25,7 +27,8 @@ export interface PreventiveLog {
 export interface HealthRow {
   cat: Cat;
   suggestion: StatusSuggestion;
-  previousWeight: { date: string; weightKg: number } | null;
+  lastWeightLogId: string | null;
+  previousWeight: { id: string; date: string; weightKg: number } | null;
   lastVaccineLog: PreventiveLog | null;
   lastFleaLog: PreventiveLog | null;
   lastDewormLog: PreventiveLog | null;
@@ -101,15 +104,18 @@ function getPreventiveStatus(nextDue: string | null): { status: "Terlambat" | "A
   return { status: "Aman", keterangan: `${days} hari lagi` };
 }
 
-/** Status berat: naik / turun berdasarkan berat terbaru vs sebelumnya */
+/** Status berat: naik / turun / sama berdasarkan berat terbaru vs sebelumnya, plus jumlah kenaikan/turun (kg) */
 function getWeightTrend(
-  last: { weightKg: number } | null,
-  previous: { weightKg: number } | null,
-): "Naik" | "Turun" | "—" {
-  if (!last || !previous) return "—";
-  if (last.weightKg > previous.weightKg) return "Naik";
-  if (last.weightKg < previous.weightKg) return "Turun";
-  return "—";
+  last: { weightKg?: number } | null | undefined,
+  previous: { weightKg?: number } | null | undefined,
+): { label: "Naik" | "Turun" | "Sama" | "—"; deltaKg: number | null } {
+  const lastKg = last != null ? Number(last.weightKg) : NaN;
+  const prevKg = previous != null ? Number(previous.weightKg) : NaN;
+  if (Number.isNaN(lastKg) || Number.isNaN(prevKg)) return { label: "—", deltaKg: null };
+  const deltaKg = lastKg - prevKg;
+  if (deltaKg > 0) return { label: "Naik", deltaKg };
+  if (deltaKg < 0) return { label: "Turun", deltaKg };
+  return { label: "Sama", deltaKg: 0 };
 }
 
 function PreventiveCell({
@@ -355,7 +361,7 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
   function CatCell({ cat }: { cat: Cat }) {
     return (
       <Link
-        href={`/cats/${cat.id}`}
+        href={`/cats/${cat.id}?returnTo=/health`}
         className="flex items-center gap-3 font-medium text-foreground hover:text-primary"
       >
         {cat.photo_url ? (
@@ -610,8 +616,8 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
                 )}
                 <th className="px-5 py-3 text-left">Cat</th>
                 <th className="min-w-[5rem] px-5 py-3 text-center">Status</th>
-                <th className="px-5 py-3 text-right">Berat sebelumnya</th>
                 <th className="px-5 py-3 text-right">Berat terbaru</th>
+                <th className="px-5 py-3 text-right">Berat sebelumnya</th>
               </tr>
             </thead>
             <tbody>
@@ -623,7 +629,7 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
                 </tr>
               )}
               {rows.map((row) => {
-                const trend = getWeightTrend(row.suggestion.lastWeight ?? null, row.previousWeight);
+                const { label: trendLabel, deltaKg } = getWeightTrend(row.suggestion.lastWeight ?? null, row.previousWeight);
                 return (
                   <tr key={row.cat.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
                     {admin && (
@@ -642,36 +648,85 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
                       <CatCell cat={row.cat} />
                     </td>
                     <td className="px-5 py-3 align-middle text-center">
-                      <span
-                        className={
-                          trend === "Naik"
-                            ? "text-xs font-medium text-green-600"
-                            : trend === "Turun"
-                              ? "text-xs font-medium text-amber-600"
-                              : "text-xs text-muted-foreground"
-                        }
-                      >
-                        {trend}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className={
+                            trendLabel === "Naik"
+                              ? "text-xs font-medium text-green-600"
+                              : trendLabel === "Turun"
+                                ? "text-xs font-medium text-amber-600"
+                                : "text-xs text-muted-foreground"
+                          }
+                        >
+                          {trendLabel}
+                        </span>
+                        {deltaKg !== null && (
+                          <span className="text-[10px] tabular-nums text-muted-foreground">
+                            {deltaKg > 0 ? `+${deltaKg.toFixed(2)} kg` : deltaKg < 0 ? `${deltaKg.toFixed(2)} kg` : "0 kg"}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3 align-middle text-right text-[11px] tabular-nums text-muted-foreground">
-                      {row.previousWeight ? (
-                        <>
-                          <div>{row.previousWeight.weightKg.toFixed(2)} kg</div>
-                          <div className="text-[10px] font-normal">{formatDateShort(new Date(row.previousWeight.date))}</div>
-                        </>
+                      {row.suggestion.lastWeight && row.lastWeightLogId ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div>{Number(row.suggestion.lastWeight.weightKg).toFixed(2)} kg</div>
+                          <div className="text-[10px] font-normal">
+                            {formatDateShort(new Date(row.suggestion.lastWeight.date))}
+                          </div>
+                          {admin && (
+                            <div className="flex items-center gap-2">
+                              <EditWeightLogDialog
+                                logId={row.lastWeightLogId}
+                                initialDate={typeof row.suggestion.lastWeight.date === "string" ? row.suggestion.lastWeight.date : new Date(row.suggestion.lastWeight.date).toISOString().slice(0, 10)}
+                                initialWeightKg={Number(row.suggestion.lastWeight.weightKg)}
+                                label="Berat terbaru"
+                                catName={row.cat.name ?? row.cat.cat_id ?? "—"}
+                              >
+                                <button type="button" className="text-xs text-primary hover:underline">
+                                  Edit
+                                </button>
+                              </EditWeightLogDialog>
+                              <DeleteWeightLogButton
+                                logId={row.lastWeightLogId}
+                                label="Berat terbaru"
+                                catName={row.cat.name ?? row.cat.cat_id ?? "—"}
+                                weightDisplay={`${Number(row.suggestion.lastWeight.weightKg).toFixed(2)} kg`}
+                              />
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         "—"
                       )}
                     </td>
                     <td className="px-5 py-3 align-middle text-right text-[11px] tabular-nums text-muted-foreground">
-                      {row.suggestion.lastWeight ? (
-                        <>
-                          <div>{row.suggestion.lastWeight.weightKg.toFixed(2)} kg</div>
-                          <div className="text-[10px] font-normal">
-                            {formatDateShort(row.suggestion.lastWeight.date)}
-                          </div>
-                        </>
+                      {row.previousWeight ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div>{Number(row.previousWeight.weightKg).toFixed(2)} kg</div>
+                          <div className="text-[10px] font-normal">{formatDateShort(new Date(row.previousWeight.date))}</div>
+                          {admin && (
+                            <div className="flex items-center gap-2">
+                              <EditWeightLogDialog
+                                logId={row.previousWeight.id}
+                                initialDate={row.previousWeight.date}
+                                initialWeightKg={row.previousWeight.weightKg}
+                                label="Berat sebelumnya"
+                                catName={row.cat.name ?? row.cat.cat_id ?? "—"}
+                              >
+                                <button type="button" className="text-xs text-primary hover:underline">
+                                  Edit
+                                </button>
+                              </EditWeightLogDialog>
+                              <DeleteWeightLogButton
+                                logId={row.previousWeight.id}
+                                label="Berat sebelumnya"
+                                catName={row.cat.name ?? row.cat.cat_id ?? "—"}
+                                weightDisplay={`${Number(row.previousWeight.weightKg).toFixed(2)} kg`}
+                              />
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         "—"
                       )}

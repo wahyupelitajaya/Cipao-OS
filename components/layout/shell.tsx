@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import { GlobalCommand } from "@/components/ui/command";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { NavLinks } from "@/components/layout/nav-links";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { getSessionProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
 import { getSearchData } from "@/lib/data/search";
@@ -71,7 +72,8 @@ export async function AppShell({ children }: { children: ReactNode }) {
       {/* Main: area kanan dengan top bar (pencarian) + content */}
       <div className="flex min-h-screen flex-1 flex-col min-w-0 lg:pl-36">
         {/* Top bar: pencarian di atas — mobile: logo + search + logout; desktop: search + logout */}
-        <header className="sticky top-0 z-20 flex min-w-0 items-center gap-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex min-w-0 items-center gap-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:gap-4 sm:px-6 lg:px-8">
+          <MobileNav email={profile?.email} role={profile?.role} />
           <Link href="/dashboard" className="flex shrink-0 items-center gap-2 min-w-0 lg:hidden">
             <Image
               src="/favicon.ico?v=2"

@@ -18,6 +18,7 @@ import { addHealthLog, addWeightLog, addGroomingLog } from "@/app/actions/logs";
 import { acceptSuggestedStatus } from "@/app/actions/cats";
 import { EditCatDialog } from "@/components/cats/edit-cat-dialog";
 import { DeleteCatButton } from "@/components/cats/delete-cat-button";
+import { HealthLogListItem } from "@/components/cats/health-log-list-item";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -90,12 +91,24 @@ function isDueSoon(date: Date | null | undefined): boolean {
   return d >= today && d <= in7;
 }
 
+/** Valid returnTo: path saja (dimulai /, tanpa protocol) untuk hindari open redirect */
+function safeReturnTo(value: string | undefined): string | null {
+  if (!value || typeof value !== "string") return null;
+  const s = value.trim();
+  if (s.startsWith("/") && !s.startsWith("//") && !s.includes(":")) return s;
+  return null;
+}
+
 interface CatProfilePageProps {
   params: Promise<{ catId: string }>;
+  searchParams?: Promise<{ returnTo?: string; from?: string }>;
 }
 
 export default async function CatProfilePage(props: CatProfilePageProps) {
   const { catId } = await props.params;
+  const search = (await props.searchParams) ?? {};
+  const returnTo = safeReturnTo(search.returnTo) ?? (search.from === "health" ? "/health" : null);
+  const backHref = returnTo ?? "/cats";
   const supabase = await createSupabaseServerClient();
   const { profile } = await getSessionProfile();
   const admin = isAdmin(profile);
@@ -142,7 +155,7 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
 
   const showBanner = admin && suggestion.suggested !== (cat.status_manual as string);
   const lastGrooming = (groomingLogs as GroomingLog[])[0] ?? null;
-  const weightHistory = (weightLogs as WeightLog[]).slice(0, 5);
+  const weightHistory = (weightLogs as WeightLog[]);
   const c = cat as Cat;
 
   const suggestionLabel = SUGGESTION_LABELS[suggestion.suggested] ?? suggestion.suggested;
@@ -157,10 +170,10 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
   return (
     <div className="flex flex-col gap-10">
       <Link
-        href="/cats"
+        href={backHref}
         className="text-sm font-medium text-muted-foreground hover:text-foreground"
       >
-        ← Daftar kucing
+        ← Kembali
       </Link>
 
       <header className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
@@ -330,31 +343,7 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
             ) : (
               <ul className="divide-y divide-border">
                 {(healthLogs as HealthLog[]).map((log) => (
-                  <li
-                    key={log.id}
-                    className="flex items-start gap-4 px-5 py-4 hover:bg-muted/20"
-                  >
-                    <span className="mt-0.5 shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      {HEALTH_TYPE_LABELS[log.type] ?? log.type}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-foreground">{log.title}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {formatDate(new Date(log.date))}
-                        {log.next_due_date && (
-                          <span> · Jatuh tempo: {formatDate(new Date(log.next_due_date))}</span>
-                        )}
-                      </p>
-                      {log.details && (
-                        <p className="mt-1 text-xs text-muted-foreground">{log.details}</p>
-                      )}
-                      {log.is_active_treatment && (
-                        <Badge variant="due-soon" className="mt-2">
-                          Perawatan aktif
-                        </Badge>
-                      )}
-                    </div>
-                  </li>
+                  <HealthLogListItem key={log.id} log={log} admin={admin} />
                 ))}
               </ul>
             )}
@@ -364,7 +353,7 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
         <div className="space-y-6">
           <div className="card px-5 py-4">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Riwayat berat (5 terakhir)
+              Riwayat berat
             </h2>
             {weightHistory.length === 0 ? (
               <p className="mt-3 text-sm text-muted-foreground">Belum ada data.</p>

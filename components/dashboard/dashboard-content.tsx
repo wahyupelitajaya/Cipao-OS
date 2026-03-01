@@ -168,7 +168,7 @@ function buildPriorityAlerts(
         title: `${PREVENTIVE_LABEL[p.type as PreventiveType]} Terlambat`,
         description: cat.name,
         date: p.nextDueDate,
-        href: `/cats/${cat.id}`,
+        href: `/cats/${cat.id}?returnTo=/dashboard`,
         photoUrl: cat.photoUrl ?? null,
       });
     }
@@ -179,7 +179,7 @@ function buildPriorityAlerts(
         title: "Dalam perawatan",
         description: cat.name,
         date: null,
-        href: `/cats/${cat.id}`,
+        href: `/cats/${cat.id}?returnTo=/dashboard`,
         photoUrl: cat.photoUrl ?? null,
       });
     }
@@ -217,7 +217,7 @@ function buildRecentNotifications(
         title: `${PREVENTIVE_LABEL[p.type as PreventiveType]} jatuh tempo`,
         description: cat.name,
         date: p.nextDueDate,
-        href: `/cats/${cat.id}`,
+        href: `/cats/${cat.id}?returnTo=/dashboard`,
         photoUrl: cat.photoUrl ?? null,
       });
     }
@@ -231,7 +231,7 @@ function buildRecentNotifications(
       title: "Grooming terakhir",
       description: entry.catName,
       date: entry.lastGroomingDate,
-      href: `/cats/${entry.catId}`,
+      href: `/cats/${entry.catId}?returnTo=/dashboard`,
       photoUrl: cat?.photoUrl ?? null,
     });
   }
@@ -510,7 +510,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
                 return (
                   <li key={cat.id}>
                     <Link
-                      href={`/cats/${cat.id}`}
+                      href={`/cats/${cat.id}?returnTo=/dashboard`}
                       className="flex w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 px-3 py-2.5 transition-colors hover:bg-muted/40"
                     >
                       {cat.photoUrl ? (

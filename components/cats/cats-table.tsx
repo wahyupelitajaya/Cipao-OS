@@ -345,7 +345,7 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
                 )}
                 <td className="px-4 py-3 align-middle">
                   <Link
-                    href={`/cats/${cat.id}`}
+                    href={`/cats/${cat.id}?returnTo=/cats`}
                     className="flex items-center gap-3"
                   >
                     {cat.photo_url ? (
@@ -386,7 +386,7 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
                 <td className="px-4 py-3 align-middle text-right text-xs">
                   <div className="flex justify-end gap-2">
                     <Link
-                      href={`/cats/${cat.id}`}
+                      href={`/cats/${cat.id}?returnTo=/cats`}
                       className="rounded-full px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
                     >
                       Open

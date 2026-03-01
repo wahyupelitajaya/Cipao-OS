@@ -18,8 +18,10 @@ export interface PreventiveLogRow {
 export interface HealthScanRow {
   cat: Cat;
   suggestion: StatusSuggestion;
-  /** Berat sebelum berat terbaru (untuk tampilan naik/turun) */
-  previousWeight: { date: string; weightKg: number } | null;
+  /** ID log berat terbaru (untuk edit) */
+  lastWeightLogId: string | null;
+  /** Berat sebelum berat terbaru (untuk tampilan naik/turun dan edit) */
+  previousWeight: { id: string; date: string; weightKg: number } | null;
   lastVaccineLog: PreventiveLogRow | null;
   lastFleaLog: PreventiveLogRow | null;
   lastDewormLog: PreventiveLogRow | null;
@@ -171,9 +173,11 @@ export async function getHealthScanData(
       healthLogs: healthForSuggestion,
       weightLogs: weightBucket,
     });
+    const lastWeightLogId = sortedWeights.length > 0 ? sortedWeights[0].id : null;
     const previousWeight =
       sortedWeights.length >= 2
         ? {
+            id: sortedWeights[1].id,
             date: sortedWeights[1].date,
             weightKg: Number(sortedWeights[1].weight_kg),
           }
@@ -183,6 +187,7 @@ export async function getHealthScanData(
     return {
       cat,
       suggestion,
+      lastWeightLogId,
       previousWeight,
       lastVaccineLog: byType.has("VACCINE")
         ? toPreventiveLogRow(byType.get("VACCINE")!)

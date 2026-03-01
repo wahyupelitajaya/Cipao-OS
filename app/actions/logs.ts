@@ -52,6 +52,30 @@ export async function addHealthLog(formData: FormData) {
   revalidateHealth();
 }
 
+export async function deleteHealthLog(formData: FormData) {
+  await requireAdmin();
+
+  const id = getString(formData, "id", { required: true });
+
+  const supabase = await createSupabaseServerClient();
+  const { data: log, error: fetchError } = await supabase
+    .from("health_logs")
+    .select("cat_id")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !log) {
+    throw new AppError(ErrorCode.NOT_FOUND, "Log kesehatan tidak ditemukan.");
+  }
+
+  const { error } = await supabase.from("health_logs").delete().eq("id", id);
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+
+  revalidateCat(log.cat_id);
+  revalidateHealth();
+}
+
 export async function bulkAddHealthLog(formData: FormData) {
   await requireAdmin();
 
@@ -138,6 +162,59 @@ export async function bulkAddWeightLog(formData: FormData) {
   for (const catId of catIds) {
     revalidateCat(catId);
   }
+}
+
+export async function updateWeightLog(formData: FormData) {
+  await requireAdmin();
+
+  const id = getString(formData, "id", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+  const weight = getWeightKg(formData, "weight_kg");
+
+  const supabase = await createSupabaseServerClient();
+  const { data: log, error: fetchError } = await supabase
+    .from("weight_logs")
+    .select("cat_id")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !log) {
+    throw new AppError(ErrorCode.NOT_FOUND, "Log berat tidak ditemukan.");
+  }
+
+  const { error } = await supabase
+    .from("weight_logs")
+    .update({ date, weight_kg: weight })
+    .eq("id", id);
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+
+  revalidateCat(log.cat_id);
+  revalidateHealth();
+}
+
+export async function deleteWeightLog(formData: FormData) {
+  await requireAdmin();
+
+  const id = getString(formData, "id", { required: true });
+
+  const supabase = await createSupabaseServerClient();
+  const { data: log, error: fetchError } = await supabase
+    .from("weight_logs")
+    .select("cat_id")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !log) {
+    throw new AppError(ErrorCode.NOT_FOUND, "Log berat tidak ditemukan.");
+  }
+
+  const { error } = await supabase.from("weight_logs").delete().eq("id", id);
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+
+  revalidateCat(log.cat_id);
+  revalidateHealth();
 }
 
 export async function addGroomingLog(formData: FormData) {

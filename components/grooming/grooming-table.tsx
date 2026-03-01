@@ -186,7 +186,7 @@ export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
                 )}
                 <td className="px-5 py-3 align-middle">
                   <Link
-                    href={`/cats/${cat.id}`}
+                    href={`/cats/${cat.id}?returnTo=/grooming`}
                     className="flex items-center gap-3 font-medium text-foreground hover:text-primary"
                   >
                     {cat.photo_url ? (
@@ -221,7 +221,7 @@ export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
                 <td className="px-5 py-3 align-middle text-right">
                   <div className="flex justify-end gap-2">
                     <Button asChild variant="ghost" size="sm">
-                      <Link href={`/cats/${cat.id}`}>Buka</Link>
+                      <Link href={`/cats/${cat.id}?returnTo=/grooming`}>Buka</Link>
                     </Button>
                     {canEdit &&
                       (last ? (

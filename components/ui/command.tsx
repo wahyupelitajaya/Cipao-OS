@@ -4,7 +4,7 @@ import * as CommandPrimitive from "cmdk";
 import { Search, User, FileText, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import type { SearchData } from "@/components/layout/shell";
 
 type GlobalCommandProps = {
@@ -14,6 +14,7 @@ type GlobalCommandProps = {
 
 export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
   const [open, setOpen] = React.useState(false);
+  const pathname = usePathname() ?? "/cats";
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -100,7 +101,7 @@ export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
                   {cats.map((cat) => (
                     <React.Fragment key={cat.id}>
                       <CommandItemLink
-                        href={`/cats/${cat.id}`}
+                        href={`/cats/${cat.id}?returnTo=${encodeURIComponent(pathname)}`}
                         label={`Profil: ${cat.name}`}
                         value={`profil ${cat.name}`}
                         setOpen={setOpen}
