@@ -225,7 +225,12 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
               </>
             )}
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-0 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
+            {c.cat_id && (
+              <span className="inline-flex rounded-full border border-slate-200/70 bg-slate-100/80 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                {c.cat_id}
+              </span>
+            )}
             {c.location && (
               <span>{LOCATION_LABELS[c.location] ?? c.location}</span>
             )}

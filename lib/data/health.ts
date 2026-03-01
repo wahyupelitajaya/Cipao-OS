@@ -27,7 +27,7 @@ export interface HealthScanRow {
   lastDewormLog: PreventiveLogRow | null;
 }
 
-/** Row from view latest_preventive_per_cat_type */
+/** Row from health_logs (preventive types) — same source as profile page */
 type LatestPreventiveRow = {
   id: string;
   cat_id: string;
@@ -63,7 +63,7 @@ export interface GetHealthScanDataOptions {
 
 /**
  * Health scan data with optimized queries:
- * - Latest preventive log per type (VACCINE, FLEA, DEWORM) per cat via view
+ * - Latest preventive log per type (VACCINE, FLEA, DEWORM) per cat from health_logs (same source as profile)
  * - Last 2 weight logs per cat via view
  * - Active treatment flag via small cat_id-only query
  * @param options.q Optional search string: filter cats by name or cat_id (case-insensitive)
@@ -95,14 +95,15 @@ export async function getHealthScanData(
   }
   const [
     { data: cats = [] },
-    { data: preventiveRows = [] },
+    { data: allPreventiveLogs = [] },
     { data: activeTreatmentCatIds = [] },
     { data: weightRows = [] },
   ] = await Promise.all([
     catsQuery,
     supabase
-      .from("latest_preventive_per_cat_type")
-      .select("id, cat_id, date, type, title, next_due_date, is_active_treatment, created_at"),
+      .from("health_logs")
+      .select("id, cat_id, date, type, title, next_due_date, is_active_treatment, created_at")
+      .in("type", ["VACCINE", "FLEA", "DEWORM"]),
     supabase
       .from("health_logs")
       .select("cat_id")
@@ -111,6 +112,25 @@ export async function getHealthScanData(
       .from("latest_2_weight_logs_per_cat")
       .select("id, cat_id, date, weight_kg, created_at"),
   ]);
+
+  const preventiveRows = (() => {
+    const list = (allPreventiveLogs as LatestPreventiveRow[]).sort((a, b) => {
+      const catCmp = String(a.cat_id).localeCompare(String(b.cat_id));
+      if (catCmp !== 0) return catCmp;
+      const typeCmp = (a.type || "").localeCompare(b.type || "");
+      if (typeCmp !== 0) return typeCmp;
+      const dateCmp = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateCmp !== 0) return dateCmp;
+      return String(b.id).localeCompare(String(a.id));
+    });
+    const seen = new Map<string, boolean>();
+    return list.filter((r) => {
+      const key = `${String(r.cat_id).toLowerCase()}:${(r.type || "").toUpperCase()}`;
+      if (seen.get(key)) return false;
+      seen.set(key, true);
+      return true;
+    });
+  })();
 
   const catsSorted = [...(cats as Cat[])].sort((a, b) => {
     let cmp = 0;
@@ -131,10 +151,12 @@ export async function getHealthScanData(
     return order === "asc" ? cmp : -cmp;
   });
 
+  const normalizeId = (id: string | null | undefined) => String(id ?? "").toLowerCase();
   const preventiveByCat = new Map<string, LatestPreventiveRow[]>();
-  catsSorted.forEach((c) => preventiveByCat.set(c.id, []));
+  catsSorted.forEach((c) => preventiveByCat.set(normalizeId(c.id), []));
   (preventiveRows as LatestPreventiveRow[]).forEach((r) => {
-    const arr = preventiveByCat.get(r.cat_id);
+    const key = normalizeId(r.cat_id);
+    const arr = preventiveByCat.get(key);
     if (arr) arr.push(r);
   });
 
@@ -150,7 +172,7 @@ export async function getHealthScanData(
   });
 
   return catsSorted.map((cat) => {
-    const preventive = preventiveByCat.get(cat.id) ?? [];
+    const preventive = preventiveByCat.get(normalizeId(cat.id)) ?? [];
     const healthForSuggestion: HealthLog[] = preventive.map((r) => ({
       ...r,
       cat_id: r.cat_id,

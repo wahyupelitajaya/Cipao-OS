@@ -358,17 +358,21 @@ export async function setNextDueDate(formData: FormData) {
   const title = PREVENTIVE_TITLES[type as PreventiveType];
 
   if (logId) {
-    const { data: updated, error } = await supabase
+    const { data: existing, error: fetchErr } = await supabase
       .from("health_logs")
-      .update({ next_due_date: nextDue })
+      .select("id, cat_id")
       .eq("id", logId)
-      .eq("cat_id", catId)
-      .select("id")
       .maybeSingle();
-    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
-    if (!updated) {
+    if (fetchErr) throw new AppError(ErrorCode.DB_ERROR, fetchErr.message, fetchErr);
+    if (!existing) {
       throw new AppError(ErrorCode.VALIDATION_ERROR, "Log kesehatan tidak ditemukan.");
     }
+    const { error: updateErr } = await supabase
+      .from("health_logs")
+      .update({ next_due_date: nextDue })
+      .eq("id", logId);
+    if (updateErr) throw new AppError(ErrorCode.DB_ERROR, updateErr.message, updateErr);
+    revalidateCat(existing.cat_id);
   } else {
     const { error } = await supabase.from("health_logs").insert({
       cat_id: catId,
@@ -379,10 +383,10 @@ export async function setNextDueDate(formData: FormData) {
       is_active_treatment: false,
     });
     if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+    revalidateCat(catId);
   }
 
   revalidateHealth();
-  revalidateCat(catId);
 }
 
 export async function bulkSetNextDueDate(formData: FormData) {
