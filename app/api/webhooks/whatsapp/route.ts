@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
+const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
+
 /** Tentukan time_slot dari jam sekarang (WIB). */
 function getTimeSlotForNow(): string {
   const hour = new Date().getUTCHours() + 7; // UTC+7
@@ -14,36 +16,23 @@ function getTimeSlotForNow(): string {
 /**
  * GET: Verifikasi webhook dengan Meta.
  * Query: hub.mode, hub.verify_token, hub.challenge
- * Meta memanggil URL ini saat Anda klik "Verify and Save". Response harus 200 + body = challenge (plain text).
  */
 export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get("hub.mode");
-  const tokenFromMeta = request.nextUrl.searchParams.get("hub.verify_token");
+  const token = request.nextUrl.searchParams.get("hub.verify_token");
   const challenge = request.nextUrl.searchParams.get("hub.challenge");
 
   if (mode !== "subscribe") {
     return NextResponse.json({ error: "Bad mode" }, { status: 400 });
   }
-
-  // Baca token dari env di dalam request (penting di Vercel serverless)
-  const expectedToken = (process.env.WHATSAPP_VERIFY_TOKEN ?? "").trim();
-  const receivedToken = (tokenFromMeta ?? "").trim();
-
-  if (!expectedToken) {
-    return NextResponse.json(
-      { error: "WHATSAPP_VERIFY_TOKEN not set on server. Add it in Vercel Environment Variables and redeploy." },
-      { status: 503 },
-    );
-  }
-  if (receivedToken !== expectedToken) {
+  if (!WHATSAPP_VERIFY_TOKEN || token !== WHATSAPP_VERIFY_TOKEN) {
     return NextResponse.json({ error: "Verify token mismatch" }, { status: 403 });
   }
-  if (challenge == null || challenge === "") {
+  if (typeof challenge !== "string") {
     return NextResponse.json({ error: "Missing challenge" }, { status: 400 });
   }
 
-  // Meta mengharapkan response body = challenge (plain text), status 200
-  return new NextResponse(String(challenge), {
+  return new NextResponse(challenge, {
     status: 200,
     headers: { "Content-Type": "text/plain" },
   });

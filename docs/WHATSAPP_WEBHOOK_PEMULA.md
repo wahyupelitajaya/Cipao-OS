@@ -108,8 +108,7 @@ Setelah ini, website Anda sudah punya dua rahasia: Verify Token untuk Meta, dan 
 5. Klik **Verify and Save**.  
    - Meta akan mengirim request **GET** ke URL Anda. Backend kita akan memeriksa token dan menjawab dengan “challenge” yang benar.  
    - Jika berhasil, Anda akan lihat tanda/status bahwa webhook **Verified**.  
-   - Jika gagal: cek lagi bahwa URL benar, env `WHATSAPP_VERIFY_TOKEN` sudah di-set di Vercel, dan project sudah di-redeploy.  
-   - Pesan "Apps will only receive test webhooks... unless published" **bukan error** — verifikasi sukses; app masih Development. Tambah nomor Anda di API Setup sebagai nomor uji, lalu kirim pesan ke nomor WA Business untuk tes.
+   - Jika gagal: cek lagi bahwa URL benar, env `WHATSAPP_VERIFY_TOKEN` sudah di-set di Vercel, dan project sudah di-redeploy.
 
 ---
 
@@ -180,7 +179,7 @@ Sekarang Meta akan memanggil URL Anda setiap ada pesan masuk ke nomor yang terhu
 
 ## Jika Ada Masalah
 
-- **Webhook “Verify” gagal:** 1) Nama env di Vercel harus persis: `WHATSAPP_VERIFY_TOKEN`. 2) Nilai token di Vercel dan di Meta (Verify token) harus sama persis, tanpa spasi. 3) Setelah ubah env, wajib Redeploy di Vercel. 4) Tes di browser: `https://PROJECT-ANDA.vercel.app/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=TOKEN_ANDA&hub.challenge=12345` — halaman harus menampilkan angka `12345` saja.
+- **Webhook “Verify” gagal:** Pastikan URL benar, env `WHATSAPP_VERIFY_TOKEN` sudah di Vercel dan sama persis dengan yang di Meta, lalu redeploy.
 - **Pesan tidak jadi Activity:** Cek env `SUPABASE_SERVICE_ROLE_KEY` sudah di-set di Vercel; cek tab Deployments → Function logs / Runtime logs untuk error.
 - **Nomor belum bisa dipakai:** Selesaikan verifikasi nomor di Meta (API Setup) dan pastikan pakai nomor yang mendukung WhatsApp Business API.
 
