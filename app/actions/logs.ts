@@ -585,7 +585,7 @@ export async function bulkSetLastPreventiveDate(formData: FormData) {
   }
 }
 
-/** Tandai kucing sebagai sembuh: ubah status jadi membaik & nonaktifkan log perawatan. Kucing hilang dari tab Dirawat. */
+/** Tandai kucing sebagai sembuh: ubah status jadi sehat, nonaktifkan log perawatan, dan catat riwayat "Sembuh" di health_logs agar muncul di profil. */
 export async function markCatsSembuh(formData: FormData) {
   await requireAdmin();
   const catIds = getJsonStringArray(formData, "cat_ids");
@@ -593,27 +593,43 @@ export async function markCatsSembuh(formData: FormData) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih minimal satu kucing.");
   }
   const supabase = await createSupabaseServerClient();
+  const today = todayISO();
+
   const { error: updateCatsError } = await supabase
     .from("cats")
     .update({ status: "sehat" })
     .in("id", catIds);
   if (updateCatsError) throw new AppError(ErrorCode.DB_ERROR, updateCatsError.message, updateCatsError);
+
   const { error: updateLogsError } = await supabase
     .from("health_logs")
     .update({ is_active_treatment: false })
     .in("cat_id", catIds);
   if (updateLogsError) throw new AppError(ErrorCode.DB_ERROR, updateLogsError.message, updateLogsError);
+
+  for (const catId of catIds) {
+    const { error: insertError } = await supabase.from("health_logs").insert({
+      cat_id: catId,
+      date: today,
+      type: "NOTE",
+      title: "Sembuh",
+      is_active_treatment: false,
+    });
+    if (insertError) throw new AppError(ErrorCode.DB_ERROR, insertError.message, insertError);
+  }
+
   revalidateHealth();
   for (const id of catIds) revalidateCat(id);
 }
 
-/** Tambah kucing ke tab Dirawat: buat log NOTE "Dalam perawatan" dengan is_active_treatment = true. */
+/** Tambah kucing ke tab Dirawat: buat log NOTE "Dalam perawatan" + keterangan (opsional), is_active_treatment = true. Muncul di riwayat kesehatan profil. */
 export async function addCatsToDirawat(formData: FormData) {
   await requireAdmin();
   const catIds = getJsonStringArray(formData, "cat_ids");
   if (catIds.length === 0) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih minimal satu kucing.");
   }
+  const keterangan = getOptionalString(formData, "keterangan");
   const today = todayISO();
   const supabase = await createSupabaseServerClient();
   for (const catId of catIds) {
@@ -622,6 +638,7 @@ export async function addCatsToDirawat(formData: FormData) {
       date: today,
       type: "NOTE",
       title: "Dalam perawatan",
+      details: keterangan?.trim() || null,
       is_active_treatment: true,
     });
     if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);

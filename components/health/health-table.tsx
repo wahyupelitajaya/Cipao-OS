@@ -319,6 +319,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
   /** Tab Dirawat: dialog tambah kucing ke Dirawat */
   const [addToDirawatOpen, setAddToDirawatOpen] = useState(false);
   const [addToDirawatSelected, setAddToDirawatSelected] = useState<Set<string>>(new Set());
+  const [addToDirawatKeterangan, setAddToDirawatKeterangan] = useState("");
 
   useEffect(() => {
     if (!savedFeedback) return;
@@ -1453,14 +1454,24 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                 setSelectedIdsDirawat(new Set());
               }}
             />
-            <Dialog open={addToDirawatOpen} onOpenChange={(open) => { setAddToDirawatOpen(open); if (!open) setAddToDirawatSelected(new Set()); }}>
+            <Dialog open={addToDirawatOpen} onOpenChange={(open) => { setAddToDirawatOpen(open); if (!open) { setAddToDirawatSelected(new Set()); setAddToDirawatKeterangan(""); } }}>
               <DialogContent className="max-h-[85vh] flex flex-col">
                 <DialogHeader>
                   <DialogTitle>Tambah kucing ke Dirawat</DialogTitle>
                 </DialogHeader>
                 <p className="text-sm text-muted-foreground">
-                  Pilih kucing yang akan ditambahkan ke daftar Dirawat (log &quot;Dalam perawatan&quot; akan dibuat).
+                  Pilih kucing yang akan ditambahkan ke daftar Dirawat (log &quot;Dalam perawatan&quot; akan dibuat dan muncul di riwayat kesehatan profil).
                 </p>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Keterangan (opsional)</label>
+                  <Input
+                    type="text"
+                    placeholder="Mis. jenis penyakit, yang merawat, lokasi..."
+                    value={addToDirawatKeterangan}
+                    onChange={(e) => setAddToDirawatKeterangan(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
                 {(() => {
                   const notInDirawat = rows.filter((r) => !dirawatIds.includes(r.cat.id));
                   if (notInDirawat.length === 0) {
@@ -1511,10 +1522,12 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                       if (addToDirawatSelected.size === 0) return;
                       const fd = new FormData();
                       fd.set("cat_ids", JSON.stringify(Array.from(addToDirawatSelected)));
+                      if (addToDirawatKeterangan.trim()) fd.set("keterangan", addToDirawatKeterangan.trim());
                       await addCatsToDirawat(fd);
                       router.refresh();
                       setAddToDirawatOpen(false);
                       setAddToDirawatSelected(new Set());
+                      setAddToDirawatKeterangan("");
                     }}
                   >
                     Tambah ({addToDirawatSelected.size})

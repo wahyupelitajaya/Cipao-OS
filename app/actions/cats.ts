@@ -204,6 +204,20 @@ export async function updateCat(formData: FormData) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Kucing tidak ditemukan.");
   }
 
+  if (formData.has("treatment_notes")) {
+    const notes = getOptionalString(formData, "treatment_notes")?.trim() || null;
+    const { error: logErr } = await supabase
+      .from("health_logs")
+      .update({ details: notes })
+      .eq("cat_id", id)
+      .eq("type", "NOTE")
+      .eq("is_active_treatment", true)
+      .ilike("title", "dalam perawatan");
+    if (logErr) {
+      console.error("Sync keterangan ke log Dirawat:", logErr);
+    }
+  }
+
   revalidateCat(id);
 }
 
@@ -261,6 +275,21 @@ export async function bulkUpdateCats(formData: FormData) {
       ErrorCode.VALIDATION_ERROR,
       `Hanya ${updatedCount} dari ${catIds.length} kucing yang diubah. Beberapa ID mungkin tidak ditemukan.`,
     );
+  }
+
+  if (treatmentNotesRaw !== undefined) {
+    for (const catId of catIds) {
+      const { error: logErr } = await supabase
+        .from("health_logs")
+        .update({ details: treatmentNotes })
+        .eq("cat_id", catId)
+        .eq("type", "NOTE")
+        .eq("is_active_treatment", true)
+        .ilike("title", "dalam perawatan");
+      if (logErr) {
+        console.error("Sync keterangan ke log Dirawat (bulk):", logErr);
+      }
+    }
   }
 
   revalidateCats();

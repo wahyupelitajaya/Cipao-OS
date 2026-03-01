@@ -31,9 +31,11 @@ function formatDate(d: Date): string {
 interface HealthLogListItemProps {
   log: HealthLog;
   admin: boolean;
+  /** Keterangan dari cat (tab Dirawat); dipakai untuk log "Dalam perawatan" jika log.details kosong. */
+  catTreatmentNotes?: string | null;
 }
 
-export function HealthLogListItem({ log, admin }: HealthLogListItemProps) {
+export function HealthLogListItem({ log, admin, catTreatmentNotes }: HealthLogListItemProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +55,32 @@ export function HealthLogListItem({ log, admin }: HealthLogListItemProps) {
   }
 
   const typeLabel = HEALTH_TYPE_LABELS[log.type] ?? log.type;
+  const dalamPerawatanKeterangan =
+    (log.title || "").toLowerCase() === "dalam perawatan"
+      ? (log.details?.trim() || catTreatmentNotes?.trim() || null)
+      : null;
+  const displayTitlePlain =
+    dalamPerawatanKeterangan !== null
+      ? dalamPerawatanKeterangan
+        ? `Dalam perawatan | ${dalamPerawatanKeterangan}`
+        : "Dalam perawatan"
+      : (log.title || "");
   const description = error
-    ? `${error}\n\nYakin ingin menghapus riwayat "${log.title}" (${typeLabel})?`
-    : `Yakin ingin menghapus riwayat "${log.title}" (${typeLabel})?`;
+    ? `${error}\n\nYakin ingin menghapus riwayat "${displayTitlePlain}" (${typeLabel})?`
+    : `Yakin ingin menghapus riwayat "${displayTitlePlain}" (${typeLabel})?`;
+
+  const titleEl =
+    dalamPerawatanKeterangan !== null && dalamPerawatanKeterangan ? (
+      <p className="font-medium text-foreground">
+        <span>Dalam perawatan</span>
+        <span className="mx-1.5 text-muted-foreground/80">|</span>
+        <span className="text-[12px] font-normal tracking-wide text-slate-500/90">
+          {dalamPerawatanKeterangan}
+        </span>
+      </p>
+    ) : (
+      <p className="font-medium text-foreground">{displayTitlePlain}</p>
+    );
 
   return (
     <li className="flex items-start gap-4 px-5 py-4 hover:bg-muted/20">
@@ -63,14 +88,14 @@ export function HealthLogListItem({ log, admin }: HealthLogListItemProps) {
         {typeLabel}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-foreground">{log.title}</p>
+        {titleEl}
         <p className="mt-0.5 text-xs text-muted-foreground">
           {formatDate(new Date(log.date))}
           {log.next_due_date && (
             <span> · Jatuh tempo: {formatDate(new Date(log.next_due_date))}</span>
           )}
         </p>
-        {log.details && (
+        {log.details?.trim() && (log.title || "").toLowerCase() !== "dalam perawatan" && (
           <p className="mt-1 text-xs text-muted-foreground">{log.details}</p>
         )}
         {log.is_active_treatment && (

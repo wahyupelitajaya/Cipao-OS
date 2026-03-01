@@ -354,7 +354,12 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
             ) : (
               <ul className="divide-y divide-border">
                 {healthLogsForDisplay.map((log) => (
-                  <HealthLogListItem key={log.id} log={log} admin={admin} />
+                  <HealthLogListItem
+                    key={log.id}
+                    log={log}
+                    admin={admin}
+                    catTreatmentNotes={c.treatment_notes}
+                  />
                 ))}
               </ul>
             )}
