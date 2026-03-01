@@ -153,6 +153,19 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
     weightLogs: weightLogs as WeightLog[],
   });
 
+  // Hapus duplikasi per (type, date) agar riwayat tidak tampil ganda (mis. tetes kutu di tanggal sama)
+  const healthLogsForDisplay = (() => {
+    const list = healthLogs as HealthLog[];
+    const seen = new Set<string>();
+    return list.filter((log) => {
+      const datePart = String(log.date).slice(0, 10);
+      const key = `${log.type}-${datePart}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  })();
+
   const showBanner = admin && suggestion.suggested !== (cat.status_manual as string);
   const lastGrooming = (groomingLogs as GroomingLog[])[0] ?? null;
   const weightHistory = (weightLogs as WeightLog[]);
@@ -330,19 +343,19 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
             )}
           </div>
 
-          <div className="card overflow-hidden p-0">
+          <div className="w-full min-w-0 overflow-hidden">
             <div className="border-b border-border px-5 py-3">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Riwayat kesehatan
               </h2>
             </div>
-            {(healthLogs as HealthLog[]).length === 0 ? (
+            {healthLogsForDisplay.length === 0 ? (
               <p className="px-5 py-8 text-center text-sm text-muted-foreground">
                 Belum ada log kesehatan.
               </p>
             ) : (
               <ul className="divide-y divide-border">
-                {(healthLogs as HealthLog[]).map((log) => (
+                {healthLogsForDisplay.map((log) => (
                   <HealthLogListItem key={log.id} log={log} admin={admin} />
                 ))}
               </ul>
@@ -351,7 +364,7 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
         </div>
 
         <div className="space-y-6">
-          <div className="card px-5 py-4">
+          <div className="w-full min-w-0 border-b border-border pb-6">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Riwayat berat
             </h2>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Cat,
@@ -10,12 +10,15 @@ import {
   AlertCircle,
   Info,
   Bell,
+  Search,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { DUE_SOON_DAYS, NOTIFICATION_WINDOW_DAYS } from "@/lib/constants";
 import type {
   DashboardData,
   DashboardCatRecord,
+  DashboardLowStockItem,
   CatWithStatus,
   SuggestedStatus,
   CatStatus,
@@ -34,8 +37,171 @@ const LOCATION_LABEL: Record<NonNullable<CatLocation>, string> = {
   klinik: "klinik",
 };
 
+type PreventiveType = "VACCINE" | "FLEA" | "DEWORM";
+type LocationValue = "klinik" | "rumah" | "toko";
+
+/** Parses natural language query for smart dashboard search. Keyword tunggal pun langsung dipakai (mis. "sakit", "klinik", "grooming"). */
+function parseSmartSearch(query: string): {
+  mode:
+    | "preventive"
+    | "name"
+    | "grooming"
+    | "weight_drop"
+    | "sick"
+    | "location"
+    | "stock_empty"
+    | "stock_low";
+  preventiveType?: PreventiveType;
+  keyword?: string;
+  nameTerms?: string[];
+  locationValue?: LocationValue;
+} {
+  const q = query.trim().toLowerCase();
+  if (!q) return { mode: "name", nameTerms: [] };
+
+  // ---- Stok (perlu diperiksa dulu agar "habis"/"rendah" tidak tertukar) ----
+  if (q.includes("habis") || q.includes("kosong")) {
+    if (q.includes("stok") || q.includes("barang") || q.length <= 12) return { mode: "stock_empty" };
+  }
+  if (
+    (q.includes("stok") || q.includes("barang")) &&
+    (q.includes("habis") || q.includes("kosong"))
+  ) {
+    return { mode: "stock_empty" };
+  }
+  const needBuy =
+    q.includes("perlu dibeli") ||
+    q.includes("perlu di beli") ||
+    (q.includes("perlu") && (q.includes("di beli") || q.includes("dibeli") || q.includes("beli")));
+  const stockLow =
+    q.includes("stok rendah") ||
+    q.includes("restock") ||
+    q.includes("reorder") ||
+    q.includes("belanja") ||
+    q.includes("pengadaan") ||
+    (q.includes("inventory") && (q.includes("rendah") || q.includes("perlu") || q.includes("beli")));
+  const stokPerlu =
+    (q.includes("stok") || q.includes("apa")) &&
+    (q.includes("perlu") || q.includes("dibeli") || q.includes("di beli") || q.includes("rendah"));
+  if (needBuy || stockLow || stokPerlu) return { mode: "stock_low" };
+  if (q === "rendah" || q === "habis" || q === "beli" || q === "dibeli") {
+    if (q === "habis") return { mode: "stock_empty" };
+    if (q === "rendah" || q === "beli" || q === "dibeli") return { mode: "stock_low" };
+  }
+
+  // ---- Lokasi: kata tunggal "klinik", "rumah", "toko" atau "di ..." ----
+  if (q.includes("klinik")) return { mode: "location", locationValue: "klinik" };
+  if (q.includes("toko")) return { mode: "location", locationValue: "toko" };
+  if (q.includes("rumah")) return { mode: "location", locationValue: "rumah" };
+
+  // ---- Sakit: kata tunggal "sakit" atau "kurang baik" ----
+  if (q.includes("sakit") || q.includes("kurang baik")) return { mode: "sick" };
+
+  // ---- Grooming: "grooming" / "belum grooming" / "mandi" / "belum mandi" (sama) ----
+  if (q.includes("grooming") || q.includes("groom") || q.includes("mandi")) return { mode: "grooming" };
+
+  // ---- Berat turun: "turun" atau "berat turun" ----
+  if (q.includes("turun") && (q.includes("berat") || q.length <= 20)) return { mode: "weight_drop" };
+
+  // ---- Preventif: vaksin / cacing / kutu (dengan atau tanpa "belum") ----
+  if (q.includes("vaksin") || q.includes("vaccine")) {
+    const keyword = q.includes("rabies") ? "rabies" : q.includes("triple") ? "triple" : undefined;
+    return { mode: "preventive", preventiveType: "VACCINE", keyword };
+  }
+  if (q.includes("kutu") || q.includes("flea") || q.includes("obat kutu")) {
+    return { mode: "preventive", preventiveType: "FLEA" };
+  }
+  if (q.includes("cacing") || q.includes("deworm") || q.includes("obat cacing")) {
+    return { mode: "preventive", preventiveType: "DEWORM" };
+  }
+
+  const nameTerms = q.split("&").map((t) => t.trim()).filter(Boolean);
+  return { mode: "name", nameTerms };
+}
+
+function filterCatsBySmartSearch(cats: DashboardCatRecord[], query: string): DashboardCatRecord[] {
+  const parsed = parseSmartSearch(query);
+  if (parsed.mode === "name") {
+    if (!parsed.nameTerms?.length) return cats;
+    return cats.filter((c) =>
+      parsed.nameTerms!.some(
+        (term) =>
+          (c.name?.toLowerCase().includes(term) ?? false) ||
+          (c.badge?.toLowerCase().includes(term) ?? false) ||
+          (c.breedName?.toLowerCase().includes(term) ?? false),
+      ),
+    );
+  }
+  if (parsed.mode === "preventive" && parsed.preventiveType) {
+    const type = parsed.preventiveType;
+    const keyword = parsed.keyword?.toLowerCase();
+    return cats.filter((c) => {
+      const p = c.preventive.find((x) => x.type === type);
+      if (!p) return true;
+      if (keyword) {
+        const hasMatch = p.lastTitle?.toLowerCase().includes(keyword) ?? false;
+        return !hasMatch;
+      }
+      return p.nextDueDate == null;
+    });
+  }
+  if (parsed.mode === "grooming") {
+    return cats.filter((c) => c.lastGroomingDate == null);
+  }
+  if (parsed.mode === "weight_drop") {
+    return cats.filter(
+      (c) =>
+        c.weight.previousKg != null &&
+        c.weight.previousKg > 0 &&
+        c.weight.currentKg < c.weight.previousKg,
+    );
+  }
+  if (parsed.mode === "sick") {
+    return cats.filter((c) => c.status === "sakit" || c.status === "kurang_baik");
+  }
+  if (parsed.mode === "location" && parsed.locationValue) {
+    return cats.filter((c) => c.location === parsed.locationValue);
+  }
+  return cats;
+}
+
+function filterStockBySmartSearch(
+  items: { id: string; name: string; stockQty: number; minStockQty: number; unit: string }[],
+  query: string,
+): { id: string; name: string; stockQty: number; minStockQty: number; unit: string }[] {
+  const parsed = parseSmartSearch(query);
+  if (parsed.mode === "stock_empty") {
+    return items.filter((i) => i.stockQty === 0);
+  }
+  if (parsed.mode === "stock_low") {
+    return items; // lowStockPanel sudah berisi item stok rendah
+  }
+  return [];
+}
+
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function formatAge(dob: string | null | undefined): string {
+  if (!dob) return "—";
+  try {
+    const birth = new Date(dob);
+    if (Number.isNaN(birth.getTime())) return "—";
+    const today = new Date();
+    let years = today.getFullYear() - birth.getFullYear();
+    let months = today.getMonth() - birth.getMonth();
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    if (years > 0 && months > 0) return `${years} tahun ${months} bulan`;
+    if (years > 0) return `${years} tahun`;
+    if (months > 0) return `${months} bulan`;
+    return "< 1 bulan";
+  } catch {
+    return "—";
+  }
 }
 
 function isOverdue(dateStr: string | null, today: Date): boolean {
@@ -116,8 +282,6 @@ function formatDateShort(dateStr: string): string {
     year: "numeric",
   });
 }
-
-type PreventiveType = "VACCINE" | "FLEA" | "DEWORM";
 
 const PREVENTIVE_LABEL: Record<PreventiveType, string> = {
   VACCINE: "Vaksin",
@@ -245,6 +409,18 @@ interface DashboardContentProps {
 }
 
 export function DashboardContent({ initialData }: DashboardContentProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const parsedQuery = useMemo(() => parseSmartSearch(searchQuery), [searchQuery]);
+  const filteredCats = useMemo(
+    () => filterCatsBySmartSearch(initialData.cats, searchQuery),
+    [initialData.cats, searchQuery],
+  );
+  const filteredStock = useMemo((): DashboardLowStockItem[] => {
+    if (parsedQuery.mode !== "stock_empty" && parsedQuery.mode !== "stock_low") return [];
+    return filterStockBySmartSearch(initialData.lowStockPanel, searchQuery);
+  }, [initialData.lowStockPanel, searchQuery, parsedQuery.mode]);
+  const isStockResult =
+    parsedQuery.mode === "stock_empty" || parsedQuery.mode === "stock_low";
   const withStatus = useMemo<CatWithStatus[]>(
     () =>
       initialData.cats.map((cat) => ({
@@ -287,16 +463,117 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
   );
 
   const totalCats = initialData.cats.length;
-  const activeCats = totalCats; // Dashboard only fetches active cats
+  const sehatCount = initialData.cats.filter(
+    (c) => c.status === "baik" || c.status == null,
+  ).length;
+  const sakitCount = initialData.cats.filter(
+    (c) => c.status === "sakit" || c.status === "kurang_baik",
+  ).length;
 
   return (
     <div className="flex flex-col gap-10">
       {/* ----------------------------------- HEADER ----------------------------------- */}
-      <header className="space-y-1 border-b border-border/80 pb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Ringkasan prioritas dan status sistem
-        </p>
+      <header className="space-y-4 border-b border-border/80 pb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Ringkasan prioritas dan status sistem
+          </p>
+        </div>
+        <form
+          onSubmit={(e) => e.preventDefault()}
+          className="flex items-center gap-2"
+        >
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Coba: sakit, klinik, grooming, vaksin, cacing, turun, stok habis, perlu dibeli…"
+            className="max-w-md"
+            aria-label="Pencarian pintar"
+          />
+        </form>
+        {searchQuery.trim() && (
+          <div className="space-y-2">
+            {isStockResult ? (
+              <>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Hasil pencarian ({filteredStock.length} item stok)
+                </h2>
+                <div className="max-h-[20rem] overflow-y-auto rounded-xl border border-border/60 bg-muted/20">
+                  {filteredStock.length === 0 ? (
+                    <p className="px-4 py-6 text-sm text-muted-foreground">
+                      Tidak ada item stok yang cocok.
+                    </p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5 p-2">
+                      {filteredStock.map((item) => (
+                        <li key={item.id}>
+                          <Link
+                            href="/inventory"
+                            className="flex w-full items-center justify-between rounded-lg border border-border/50 bg-background/80 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                          >
+                            <span className="font-medium text-foreground">{item.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              Stok: {item.stockQty} / {item.minStockQty} {item.unit}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Hasil pencarian ({filteredCats.length} kucing)
+                </h2>
+                <div className="max-h-[20rem] overflow-y-auto rounded-xl border border-border/60 bg-muted/20">
+                  {filteredCats.length === 0 ? (
+                    <p className="px-4 py-6 text-sm text-muted-foreground">
+                      Tidak ada kucing yang cocok.
+                    </p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5 p-2">
+                      {filteredCats.map((cat) => (
+                        <li key={cat.id}>
+                          <Link
+                            href={`/cats/${cat.id}?returnTo=/dashboard`}
+                            className="flex w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                          >
+                            {cat.photoUrl ? (
+                              <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/80 bg-muted shadow-sm">
+                                <img
+                                  src={cat.photoUrl}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                  width={40}
+                                  height={40}
+                                />
+                              </span>
+                            ) : (
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/80 text-sm font-medium text-muted-foreground">
+                                {cat.name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground">{cat.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[cat.breedName, formatAge(cat.dob)].filter(Boolean).join(" · ") || "—"}
+                          </p>
+                        </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </header>
 
       {/* ----------------------------------- KARTU RINGKASAN (bisa diklik, dengan warna halus) ----------------------------------- */}
@@ -309,7 +586,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
             {totalCats}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {activeCats} aktif
+            Sehat {sehatCount} · Sakit {sakitCount}
           </p>
           <div className="mt-3 flex items-center gap-2 text-muted-foreground">
             <Cat className="h-4 w-4" aria-hidden />

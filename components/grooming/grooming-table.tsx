@@ -134,7 +134,7 @@ export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
         </form>
       )}
 
-      <div className="table-container overflow-hidden">
+      <div className="w-full min-w-0 overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">

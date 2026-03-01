@@ -4,7 +4,7 @@ import { getSessionProfile, isAdmin } from "@/lib/auth";
 import { getHealthScanData, type HealthSortBy, type HealthSortOrder } from "@/lib/data/health";
 import { HealthTable } from "@/components/health/health-table";
 import { HealthSortSelect } from "@/components/health/health-sort-select";
-import { Input } from "@/components/ui/input";
+import { HealthSearchForm } from "@/components/health/health-search-form";
 import type { Tables } from "@/lib/types";
 
 type Breed = Tables<"cat_breeds">;
@@ -12,8 +12,10 @@ type Breed = Tables<"cat_breeds">;
 const SORT_BY_OPTIONS = ["name", "cat_id", "dob"] as const;
 const ORDER_OPTIONS = ["asc", "desc"] as const;
 
+const VALID_TABS = ["berat", "obatCacing", "obatKutu", "vaksin"] as const;
+
 interface HealthPageProps {
-  searchParams?: Promise<{ q?: string; sortBy?: string; order?: string }>;
+  searchParams?: Promise<{ q?: string; sortBy?: string; order?: string; tab?: string }>;
 }
 
 function parseSort(search: { sortBy?: string; order?: string }): { sortBy: HealthSortBy; order: HealthSortOrder } {
@@ -25,6 +27,11 @@ function parseSort(search: { sortBy?: string; order?: string }): { sortBy: Healt
 export default async function HealthPage(props: HealthPageProps) {
   const search = (await props.searchParams) ?? {};
   const q = (search.q ?? "").trim();
+  const tabParam = search.tab;
+  const initialTab =
+    tabParam && VALID_TABS.includes(tabParam as (typeof VALID_TABS)[number])
+      ? (tabParam as (typeof VALID_TABS)[number])
+      : "berat";
   const { sortBy, order } = parseSort(search);
 
   const supabase = await createSupabaseServerClient();
@@ -52,14 +59,7 @@ export default async function HealthPage(props: HealthPageProps) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
-          <form method="get" className="flex items-center gap-2">
-            <Input
-              name="q"
-              placeholder="Cari nama atau ID kucing…"
-              defaultValue={q}
-              className="w-44"
-            />
-          </form>
+          <HealthSearchForm defaultValue={q} />
           <Suspense fallback={<span className="text-sm text-muted-foreground">Urutkan: …</span>}>
             <HealthSortSelect />
           </Suspense>
@@ -67,7 +67,7 @@ export default async function HealthPage(props: HealthPageProps) {
       </header>
 
       <div className="w-full min-w-0">
-        <HealthTable rows={rows} breeds={(breeds ?? []) as Breed[]} admin={admin} />
+        <HealthTable rows={rows} breeds={(breeds ?? []) as Breed[]} admin={admin} initialTab={initialTab} />
       </div>
     </div>
   );

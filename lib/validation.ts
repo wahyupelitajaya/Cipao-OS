@@ -41,7 +41,7 @@ export function getOptionalString(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
 
-/** Returns date string YYYY-MM-DD or null. Throws if required but missing/invalid. */
+/** Returns date string YYYY-MM-DD or null. Throws if required but missing/invalid. Tidak konversi lewat UTC. */
 export function getDate(
   formData: FormData,
   key: string,
@@ -52,6 +52,7 @@ export function getDate(
     if (options?.required) throw new Error(`Field ${key} (date) is required.`);
     return null;
   }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   const dateStr = toISODateString(raw);
   if (!dateStr && options?.required) {
     throw new Error("Format tanggal tidak valid.");
@@ -143,10 +144,12 @@ export function validateSuggestedStatus(value: string): value is SuggestedStatus
   return (SUGGESTED_STATUSES as readonly string[]).includes(value);
 }
 
-/** Throws if date string is invalid or required but empty. */
+/** Throws if date string is invalid or required but empty. Returns YYYY-MM-DD (tanpa lewat UTC). */
 export function requireDate(formData: FormData, key: string, label = "Tanggal"): string {
   const raw = String(formData.get(key) ?? "").trim();
   if (!raw) throw new Error(`${label} wajib diisi.`);
+  // Input dari <input type="date"> selalu YYYY-MM-DD (hari kalender lokal). Jangan konversi lewat Date/UTC.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   if (!isValidDateString(raw)) throw new Error("Format tanggal tidak valid.");
   return toISODateString(raw) ?? raw;
 }

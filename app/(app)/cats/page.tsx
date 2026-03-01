@@ -52,7 +52,11 @@ export default async function CatsPage(props: CatsPageProps) {
     .order("id", { ascending: true })
     .range(from, to);
   if (q) {
-    query = query.or(`name.ilike.%${q}%,cat_id.ilike.%${q}%`) as typeof query;
+    const terms = q.split("&").map((t) => t.trim()).filter(Boolean);
+    if (terms.length > 0) {
+      const orParts = terms.flatMap((term) => [`name.ilike.%${term}%`, `cat_id.ilike.%${term}%`]);
+      query = query.or(orParts.join(",")) as typeof query;
+    }
   }
   const { data: cats = [], count: totalCount = 0 } = await query;
 
@@ -86,7 +90,7 @@ export default async function CatsPage(props: CatsPageProps) {
             <input type="hidden" name="page" value="1" />
             <Input
               name="q"
-              placeholder="Cari nama atau ID…"
+              placeholder="Cari nama atau ID (pisah dengan & untuk beberapa)"
               defaultValue={q}
               className="w-44"
             />

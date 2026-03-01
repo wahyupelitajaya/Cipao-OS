@@ -395,6 +395,7 @@ export async function bulkSetNextDueDate(formData: FormData) {
 
   const type = getString(formData, "type", { required: true });
   const nextDue = requireDate(formData, "next_due_date", "Next due date");
+  const titleInput = getOptionalString(formData, "title");
 
   if (!validatePreventiveType(type)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Tipe harus VACCINE, FLEA, atau DEWORM.");
@@ -402,7 +403,8 @@ export async function bulkSetNextDueDate(formData: FormData) {
 
   const supabase = await createSupabaseServerClient();
   const today = todayISO();
-  const title = PREVENTIVE_TITLES[type as PreventiveType];
+  const defaultTitle = PREVENTIVE_TITLES[type as PreventiveType];
+  const title = titleInput?.trim() ? titleInput.trim() : defaultTitle;
 
   for (const catId of catIds) {
     const { data: latest, error: fetchError } = await supabase
@@ -418,9 +420,11 @@ export async function bulkSetNextDueDate(formData: FormData) {
     if (fetchError) throw new AppError(ErrorCode.DB_ERROR, fetchError.message, fetchError);
 
     if (latest?.id) {
+      const updateData: { next_due_date: string; title?: string } = { next_due_date: nextDue };
+      if (titleInput?.trim()) updateData.title = titleInput.trim();
       const { error: updateError } = await supabase
         .from("health_logs")
-        .update({ next_due_date: nextDue })
+        .update(updateData)
         .eq("id", latest.id)
         .eq("cat_id", catId);
       if (updateError) throw new AppError(ErrorCode.DB_ERROR, updateError.message, updateError);
@@ -467,6 +471,36 @@ function calculateNextDueDate(type: PreventiveType, lastDate: string): string | 
   return `${nextYear}-${nextMonth}-${nextDay}`;
 }
 
+/** Mengembalikan true jika ada minimal satu kucing yang sudah punya log preventive di tanggal tersebut. */
+export async function checkExistingPreventiveLogs(formData: FormData): Promise<{ hasExisting: boolean }> {
+  await requireAdmin();
+
+  const catIds = getJsonStringArray(formData, "cat_ids");
+  const typeRaw = formData.get("type");
+  const dateRaw = formData.get("date");
+  if (!catIds.length || !typeRaw || !dateRaw) return { hasExisting: false };
+
+  const type = String(typeRaw).trim().toUpperCase();
+  if (type !== "DEWORM" && type !== "FLEA" && type !== "VACCINE") return { hasExisting: false };
+
+  const dateNorm = String(dateRaw).trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateNorm)) return { hasExisting: false };
+
+  const supabase = await createSupabaseServerClient();
+  for (const catId of catIds) {
+    const { data } = await supabase
+      .from("health_logs")
+      .select("id")
+      .eq("cat_id", catId)
+      .eq("type", type)
+      .eq("date", dateNorm)
+      .limit(1)
+      .maybeSingle();
+    if (data?.id) return { hasExisting: true };
+  }
+  return { hasExisting: false };
+}
+
 export async function bulkSetLastPreventiveDate(formData: FormData) {
   await requireAdmin();
 
@@ -477,56 +511,68 @@ export async function bulkSetLastPreventiveDate(formData: FormData) {
 
   const type = getString(formData, "type", { required: true });
   const date = requireDate(formData, "date", "Tanggal");
+  const titleInput = getOptionalString(formData, "title");
 
   if (!validatePreventiveType(type)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Tipe harus VACCINE, FLEA, atau DEWORM.");
   }
 
   const supabase = await createSupabaseServerClient();
-  const title = PREVENTIVE_TITLES[type as PreventiveType];
-  
-  // Automatically calculate next due date based on preventive type
-  // This will be set only if next_due_date is currently null (manual override preserved)
-  const calculatedNextDue = calculateNextDueDate(type as PreventiveType, date);
+  const defaultTitle = PREVENTIVE_TITLES[type as PreventiveType];
+  const title = titleInput?.trim() ? titleInput.trim() : defaultTitle;
+
+  // Set Last hanya mencatat tanggal pemberian. Next due diatur terpisah lewat "Set Next due"
+  const nextDueToSet = null as string | null;
+
+  // Obat cacing, Obat kutu, Vaksin: jika sudah ada log di tanggal yang sama, update (replace) jangan insert baru
+  const doReplace = type === "FLEA" || type === "DEWORM" || type === "VACCINE";
+  const dateNorm = date.trim().slice(0, 10);
 
   for (const catId of catIds) {
-    const { data: latest, error: fetchError } = await supabase
-      .from("health_logs")
-      .select("id, next_due_date")
-      .eq("cat_id", catId)
-      .eq("type", type)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (fetchError) throw new AppError(ErrorCode.DB_ERROR, fetchError.message, fetchError);
-
-    if (latest?.id) {
-      // Only auto-calculate if next_due_date is not already set (preserve manual overrides)
-      const updateData: { date: string; next_due_date?: string | null } = { date };
-      if (latest.next_due_date === null && calculatedNextDue) {
-        updateData.next_due_date = calculatedNextDue;
-      }
-      
-      const { error: updateError } = await supabase
+    if (doReplace) {
+      // Cari log preventive di tanggal ini: dulu pakai .eq("date", date), kalau tidak ketemu cocokkan manual
+      const { data: byDate, error: errByDate } = await supabase
         .from("health_logs")
-        .update(updateData)
-        .eq("id", latest.id)
-        .eq("cat_id", catId);
-      if (updateError) throw new AppError(ErrorCode.DB_ERROR, updateError.message, updateError);
-    } else {
-      // New log: always set calculated next due date
-      const { error: insertError } = await supabase.from("health_logs").insert({
-        cat_id: catId,
-        type,
-        date,
-        title,
-        next_due_date: calculatedNextDue,
-        is_active_treatment: false,
-      });
-      if (insertError) throw new AppError(ErrorCode.DB_ERROR, insertError.message, insertError);
+        .select("id")
+        .eq("cat_id", catId)
+        .eq("type", type)
+        .eq("date", date)
+        .limit(1)
+        .maybeSingle();
+      let existingId: string | null = null;
+      if (!errByDate && byDate?.id) {
+        existingId = byDate.id;
+      } else {
+        const { data: rows, error: fetchErr } = await supabase
+          .from("health_logs")
+          .select("id, date")
+          .eq("cat_id", catId)
+          .eq("type", type)
+          .order("created_at", { ascending: false });
+        if (!fetchErr && Array.isArray(rows)) {
+          const found = rows.find((r) => r?.date && String(r.date).trim().slice(0, 10) === dateNorm);
+          if (found?.id) existingId = found.id;
+        }
+      }
+      if (existingId) {
+        const { error: updateErr } = await supabase
+          .from("health_logs")
+          .update({ date, title })
+          .eq("id", existingId)
+          .eq("cat_id", catId);
+        if (updateErr) throw new AppError(ErrorCode.DB_ERROR, updateErr.message, updateErr);
+        continue;
+      }
     }
+    const { error: insertError } = await supabase.from("health_logs").insert({
+      cat_id: catId,
+      type,
+      date,
+      title,
+      next_due_date: nextDueToSet,
+      is_active_treatment: false,
+    });
+    if (insertError) throw new AppError(ErrorCode.DB_ERROR, insertError.message, insertError);
   }
 
   revalidateHealth();

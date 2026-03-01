@@ -84,8 +84,14 @@ export async function getHealthScanData(
     .eq("is_active", true)
     .order("cat_id", { ascending: true });
   if (q && q.trim()) {
-    const term = q.trim();
-    catsQuery = catsQuery.or(`name.ilike.%${term}%,cat_id.ilike.%${term}%`) as typeof catsQuery;
+    const terms = q
+      .split("&")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (terms.length > 0) {
+      const orParts = terms.flatMap((term) => [`name.ilike.%${term}%`, `cat_id.ilike.%${term}%`]);
+      catsQuery = catsQuery.or(orParts.join(",")) as typeof catsQuery;
+    }
   }
   const [
     { data: cats = [] },

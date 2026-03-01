@@ -285,7 +285,7 @@ export function CatsTable({ cats, breeds, admin }: CatsTableProps) {
         </form>
       )}
 
-      <div className="overflow-hidden rounded-3xl border bg-background">
+      <div className="w-full min-w-0 overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b text-xs uppercase tracking-[0.16em] text-muted-foreground">

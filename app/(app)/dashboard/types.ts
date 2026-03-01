@@ -8,7 +8,11 @@ export interface DashboardCatRecord {
   status: CatStatus;
   location: CatLocation;
   photoUrl: string | null;
-  preventive: { type: "VACCINE" | "FLEA" | "DEWORM"; nextDueDate: string | null }[];
+  /** Nama ras/jenis kucing untuk tampilan (mis. di hasil pencarian). */
+  breedName: string | null;
+  /** Tanggal lahir (YYYY-MM-DD) untuk hitung usia. */
+  dob: string | null;
+  preventive: { type: "VACCINE" | "FLEA" | "DEWORM"; nextDueDate: string | null; lastTitle: string | null }[];
   weight: { currentKg: number; previousKg?: number };
   hasActiveTreatment: boolean;
   lastGroomingDate: string | null;

@@ -1,5 +1,5 @@
 import type { Tables } from "./types";
-import { startOfDay, isOverdue, isDueWithin } from "./dates";
+import { startOfDay, isOverdue, isDueWithin, parseLocalDateString } from "./dates";
 import { DUE_SOON_DAYS } from "./constants";
 
 type HealthLog = Tables<"health_logs">;
@@ -113,8 +113,8 @@ function findNextDue(
 ): Date | null {
   const candidates = healthLogs
     .filter((h) => h.type === type && h.next_due_date)
-    .map((h) => new Date(h.next_due_date as string))
-    .filter((d) => !Number.isNaN(d.getTime()))
+    .map((h) => parseLocalDateString(h.next_due_date as string))
+    .filter((d): d is Date => d != null && !Number.isNaN(d.getTime()))
     .sort((a, b) => a.getTime() - b.getTime());
 
   return candidates[0] ?? null;

@@ -26,6 +26,29 @@ export function parseDateISO(value: string | null | undefined): Date | null {
 }
 
 /**
+ * Parses date as midnight in LOCAL timezone.
+ * Handles: "2026-02-15" or "2026-02-15T00:00:00.000Z" (ISO) — always uses the date part as local day.
+ * Avoids timezone bugs: new Date("2026-02-15") is UTC midnight, so in UTC-7 it becomes 14 Feb.
+ */
+export function parseLocalDateString(value: string | null | undefined): Date | null {
+  if (value == null || String(value).trim() === "") return null;
+  const s = String(value).trim();
+  // Extract YYYY-MM-DD from start (pure date or ISO datetime like 2026-02-15T00:00:00.000Z)
+  const datePart = s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+  if (match) {
+    const y = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10) - 1;
+    const d = parseInt(match[3], 10);
+    const date = new Date(y, m, d);
+    if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) return null;
+    return date;
+  }
+  const fallback = new Date(s);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+/**
  * Returns true if the string is a valid date (YYYY-MM-DD or parseable ISO).
  */
 export function isValidDateString(value: string | null | undefined): boolean {

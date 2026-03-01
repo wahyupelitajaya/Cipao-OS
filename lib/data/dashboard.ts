@@ -62,6 +62,7 @@ export async function getDashboardData(
 ): Promise<DashboardData> {
   const [
     { data: cats = [] },
+    { data: breeds = [] },
     { data: preventiveRows = [] },
     { data: activeTreatmentCatIds = [] },
     { data: weightRows = [] },
@@ -70,9 +71,13 @@ export async function getDashboardData(
   ] = await Promise.all([
     supabase
       .from("cats")
-      .select("id, name, cat_id, status, location, photo_url")
+      .select("id, name, cat_id, status, location, photo_url, breed_id, dob")
       .eq("is_active", true)
       .order("cat_id", { ascending: true }),
+    supabase
+      .from("cat_breeds")
+      .select("id, name")
+      .order("sort_order", { ascending: true }),
     supabase
       .from("latest_preventive_per_cat_type")
       .select("id, cat_id, date, type, title, next_due_date, is_active_treatment, created_at"),
@@ -114,6 +119,10 @@ export async function getDashboardData(
     lastGroomingByCat.set(r.cat_id, { date: r.date });
   });
 
+  const breedsById = new Map(
+    (breeds as { id: string; name: string }[]).map((b) => [b.id, b.name]),
+  );
+
   const dashboardCats: DashboardCatRecord[] = (cats as Cat[]).map((cat) => {
     const bucket = preventiveByCat.get(cat.id) ?? [];
     const weightBucket = weightsByCat.get(cat.id) ?? [];
@@ -129,6 +138,9 @@ export async function getDashboardData(
     const lastGrooming = lastGroomingByCat.get(cat.id);
     const hasActiveTreatment = activeTreatmentSet.has(cat.id);
 
+    const vaccineRow = bucket.find((r) => r.type === "VACCINE");
+    const fleaRow = bucket.find((r) => r.type === "FLEA");
+    const dewormRow = bucket.find((r) => r.type === "DEWORM");
     return {
       id: cat.id,
       name: cat.name,
@@ -136,10 +148,12 @@ export async function getDashboardData(
       status: cat.status ?? null,
       location: cat.location ?? null,
       photoUrl: cat.photo_url ?? null,
+      breedName: cat.breed_id ? breedsById.get(cat.breed_id) ?? null : null,
+      dob: cat.dob ?? null,
       preventive: [
-        { type: "VACCINE", nextDueDate: toYmd(suggestion.nextVaccine) },
-        { type: "FLEA", nextDueDate: toYmd(suggestion.nextFlea) },
-        { type: "DEWORM", nextDueDate: toYmd(suggestion.nextDeworm) },
+        { type: "VACCINE", nextDueDate: toYmd(suggestion.nextVaccine), lastTitle: vaccineRow?.title ?? null },
+        { type: "FLEA", nextDueDate: toYmd(suggestion.nextFlea), lastTitle: fleaRow?.title ?? null },
+        { type: "DEWORM", nextDueDate: toYmd(suggestion.nextDeworm), lastTitle: dewormRow?.title ?? null },
       ],
       weight: {
         currentKg: suggestion.lastWeight?.weightKg ?? 0,

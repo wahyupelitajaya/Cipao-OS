@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { bulkSetLastPreventiveDate, bulkSetNextDueDate, bulkAddWeightLog } from "@/app/actions/logs";
+import { bulkSetLastPreventiveDate, bulkSetNextDueDate, bulkAddWeightLog, checkExistingPreventiveLogs } from "@/app/actions/logs";
 import { getFriendlyMessage } from "@/lib/errors";
 import { SetNextDueDialog } from "@/components/health/set-next-due-dialog";
 import { SetLastDateDialog } from "@/components/health/set-last-date-dialog";
 import { EditWeightLogDialog } from "@/components/health/edit-weight-log-dialog";
 import { DeleteWeightLogButton } from "@/components/health/delete-weight-log-button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { parseLocalDateString } from "@/lib/dates";
 import type { Tables } from "@/lib/types";
 import type { StatusSuggestion } from "@/lib/cat-status";
 
@@ -44,6 +46,8 @@ interface HealthTableProps {
   rows: HealthRow[];
   breeds: Breed[];
   admin: boolean;
+  /** Tab aktif dari URL (agar setelah pencarian/refresh tetap di tab yang sama). */
+  initialTab?: SectionKey;
 }
 
 function formatDateShort(date: Date): string {
@@ -80,25 +84,26 @@ function startOfDay(d: Date): Date {
 }
 
 function isOverdue(nextDue: string | null): boolean {
-  if (!nextDue) return false;
-  const d = new Date(nextDue);
-  return startOfDay(d).getTime() < startOfDay(new Date()).getTime();
+  const d = parseLocalDateString(nextDue);
+  if (!d) return false;
+  return d.getTime() < startOfDay(new Date()).getTime();
 }
 
 function isDueWithin7Days(nextDue: string | null): boolean {
-  if (!nextDue) return false;
+  const due = parseLocalDateString(nextDue);
+  if (!due) return false;
   const today = startOfDay(new Date());
-  const due = startOfDay(new Date(nextDue));
   const diff = (due.getTime() - today.getTime()) / (24 * 60 * 60 * 1000);
   return diff >= 0 && diff <= 7;
 }
 
-/** Status & keterangan untuk preventive (vaksin/obat kutu/obat cacing) berdasarkan next_due_date */
-function getPreventiveStatus(nextDue: string | null): { status: "Terlambat" | "Aman" | "—"; keterangan: string } {
-  if (!nextDue) return { status: "—", keterangan: "Belum dijadwalkan" };
-  const today = startOfDay(new Date());
-  const due = startOfDay(new Date(nextDue));
-  const days = Math.round((due.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+/** Status & keterangan untuk preventive berdasarkan next_due_date. Semua pakai tanggal lokal (hari kalender). */
+function getPreventiveStatus(nextDue: string | null | undefined): { status: "Terlambat" | "Aman" | "—"; keterangan: string } {
+  const due = parseLocalDateString(nextDue != null ? String(nextDue).trim() : null);
+  if (!due) return { status: "—", keterangan: "Belum dijadwalkan" };
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.floor((due.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
   if (days < 0) return { status: "Terlambat", keterangan: `Terlambat ${Math.abs(days)} hari` };
   if (days === 0) return { status: "Aman", keterangan: "Hari ini" };
   return { status: "Aman", keterangan: `${days} hari lagi` };
@@ -228,15 +233,20 @@ function StatusBadge({
 
 type SectionKey = "berat" | "obatCacing" | "obatKutu" | "vaksin";
 
-export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
+export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: HealthTableProps) {
   const breedsById = new Map(breeds.map((b) => [b.id, b]));
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [selectedIdsBerat, setSelectedIdsBerat] = useState<Set<string>>(new Set());
   const [selectedIdsObatCacing, setSelectedIdsObatCacing] = useState<Set<string>>(new Set());
   const [selectedIdsObatKutu, setSelectedIdsObatKutu] = useState<Set<string>>(new Set());
   const [selectedIdsVaksin, setSelectedIdsVaksin] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<SectionKey>("berat");
+  const [activeTab, setActiveTab] = useState<SectionKey>(initialTab);
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+  const [viewScale, setViewScale] = useState(1);
   const [bulkSetDate, setBulkSetDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
@@ -248,6 +258,21 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
   );
   const [bulkWeightKg, setBulkWeightKg] = useState("");
   const [bulkWeightError, setBulkWeightError] = useState<string | null>(null);
+  const [bulkDewormTitle, setBulkDewormTitle] = useState("");
+  const [bulkFleaTitle, setBulkFleaTitle] = useState("");
+  const [bulkVaccineTitle, setBulkVaccineTitle] = useState("");
+  /** Konfirmasi replace log di tanggal yang sama (obat cacing / obat kutu / vaksin) */
+  const [replaceConfirm, setReplaceConfirm] = useState<{ formData: FormData; section: "obatCacing" | "obatKutu" | "vaksin" } | null>(null);
+  /** Yang sedang disimpan: { section, action } agar hanya tombol yang diklik yang tampil loading */
+  const [pendingBulkAction, setPendingBulkAction] = useState<{ section: "obatCacing" | "obatKutu" | "vaksin"; action: "last" | "next" } | null>(null);
+  /** Pesan sukses setelah simpan (per section+action), hilang setelah beberapa detik */
+  const [savedFeedback, setSavedFeedback] = useState<{ section: "obatCacing" | "obatKutu" | "vaksin"; action: "last" | "next" } | null>(null);
+
+  useEffect(() => {
+    if (!savedFeedback) return;
+    const t = setTimeout(() => setSavedFeedback(null), 4000);
+    return () => clearTimeout(t);
+  }, [savedFeedback]);
 
   const allIds = rows.map((r) => r.cat.id);
 
@@ -303,7 +328,7 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
     vaksin: { type: "VACCINE", label: "Vaksin" },
   };
 
-  function handleBulkSetLastForSection(section: "obatCacing" | "obatKutu" | "vaksin") {
+  async function handleBulkSetLastForSection(section: "obatCacing" | "obatKutu" | "vaksin") {
     const ids = getSelectedForSection(section);
     if (ids.size === 0) return;
     const { type } = PREVENTIVE_SECTION_MAP[section];
@@ -311,25 +336,61 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
     formData.set("cat_ids", JSON.stringify(Array.from(ids)));
     formData.set("type", type);
     formData.set("date", bulkSetDate);
-    startTransition(async () => {
+    if (section === "obatCacing" && bulkDewormTitle.trim()) formData.set("title", bulkDewormTitle.trim());
+    if (section === "obatKutu" && bulkFleaTitle.trim()) formData.set("title", bulkFleaTitle.trim());
+    if (section === "vaksin" && bulkVaccineTitle.trim()) formData.set("title", bulkVaccineTitle.trim());
+
+    setPendingBulkAction({ section, action: "last" });
+    try {
+      const { hasExisting } = await checkExistingPreventiveLogs(formData);
+      if (hasExisting) {
+        setReplaceConfirm({ formData, section });
+        return;
+      }
       await bulkSetLastPreventiveDate(formData);
-      setSelectedForSection(section, new Set());
+      setSavedFeedback({ section, action: "last" });
       router.refresh();
-    });
+    } finally {
+      setPendingBulkAction(null);
+    }
+  }
+
+  async function handleReplaceConfirm() {
+    const payload = replaceConfirm;
+    if (!payload) return;
+    const { formData, section } = payload;
+    formData.set("replace_existing", "1");
+    setReplaceConfirm(null);
+    setPendingBulkAction({ section, action: "last" });
+    try {
+      await bulkSetLastPreventiveDate(formData);
+      setSavedFeedback({ section, action: "last" });
+      router.refresh();
+    } finally {
+      setPendingBulkAction(null);
+    }
   }
 
   function handleBulkSetNextDueForSection(section: "obatCacing" | "obatKutu" | "vaksin") {
     const ids = getSelectedForSection(section);
     if (ids.size === 0) return;
+    setPendingBulkAction({ section, action: "next" });
     const { type } = PREVENTIVE_SECTION_MAP[section];
     const formData = new FormData();
     formData.set("cat_ids", JSON.stringify(Array.from(ids)));
     formData.set("type", type);
     formData.set("next_due_date", bulkNextDueDate);
+    if (section === "obatCacing" && bulkDewormTitle.trim()) formData.set("title", bulkDewormTitle.trim());
+    if (section === "obatKutu" && bulkFleaTitle.trim()) formData.set("title", bulkFleaTitle.trim());
+    if (section === "vaksin" && bulkVaccineTitle.trim()) formData.set("title", bulkVaccineTitle.trim());
     startTransition(async () => {
-      await bulkSetNextDueDate(formData);
-      setSelectedForSection(section, new Set());
-      router.refresh();
+      try {
+        await bulkSetNextDueDate(formData);
+        setSavedFeedback({ section, action: "next" });
+        router.refresh();
+      } finally {
+        setPendingBulkAction(null);
+      }
     });
   }
 
@@ -392,14 +453,6 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
     );
   }
 
-  function TableBox({ children }: { children: React.ReactNode }) {
-    return (
-      <div className="w-full max-w-full overflow-auto rounded-xl border border-border max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
-        {children}
-      </div>
-    );
-  }
-
   const tabs: { key: SectionKey; label: string }[] = [
     { key: "berat", label: "Berat badan" },
     { key: "obatCacing", label: "Obat cacing" },
@@ -425,28 +478,72 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
         break;
     }
     setActiveTab(key);
+    // Sinkronkan tab ke URL agar saat pencarian (Enter) tab tetap sama
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", key);
+    router.replace(`/health?${params.toString()}`, { scroll: false });
   }
+
+  const scaleOptions = [1, 0.9, 0.8, 0.75] as const;
 
   return (
     <div className="w-full min-w-0 space-y-4">
-      {/* Tab: pilih kategori, satu tabel tampil tanpa scroll panjang */}
-      <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-muted/30 p-1">
-        {tabs.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => handleTabChange(key)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === key
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-            }`}
+      <ConfirmDialog
+        open={replaceConfirm !== null}
+        onOpenChange={(open) => { if (!open) setReplaceConfirm(null); }}
+        title={replaceConfirm ? `Simpan log ${PREVENTIVE_SECTION_MAP[replaceConfirm.section].label}` : "Konfirmasi"}
+        description={
+          replaceConfirm
+            ? `Simpan ${PREVENTIVE_SECTION_MAP[replaceConfirm.section].label.toLowerCase()} untuk tanggal ${bulkSetDate}? Jika kucing sudah punya log di tanggal ini, data akan diganti.`
+            : ""
+        }
+        confirmLabel="Ya, simpan"
+        cancelLabel="Batal"
+        onConfirm={handleReplaceConfirm}
+      />
+      {/* Tab + kontrol tampilan */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-muted/30 p-1">
+          {tabs.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => handleTabChange(key)}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === key
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Tampilan:</span>
+          <select
+            value={viewScale}
+            onChange={(e) => setViewScale(Number(e.target.value) as typeof scaleOptions[number])}
+            className="h-8 rounded-lg border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label="Perkecil tampilan"
           >
-            {label}
-          </button>
-        ))}
+            {scaleOptions.map((s) => (
+              <option key={s} value={s}>{Math.round(s * 100)}%</option>
+            ))}
+          </select>
+        </div>
       </div>
 
+      <div className="w-full overflow-hidden" style={{ maxWidth: "100%" }}>
+        <div
+          style={{
+            display: "inline-block",
+            width: `${100 / viewScale}%`,
+            minWidth: "100%",
+            transform: `scale(${viewScale})`,
+            transformOrigin: "top left",
+          }}
+        >
       {admin && selectedIdsBerat.size > 0 && (
         <div className="card space-y-3 px-5 py-4 text-sm">
           <div className="flex flex-wrap items-center gap-2">
@@ -509,21 +606,37 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
               Batal pilih
             </Button>
           </div>
-          <div className="grid gap-4 border-t pt-3 sm:grid-cols-2">
+          <div className="space-y-1 border-t border-border pt-3">
+            <label className="text-xs font-medium text-muted-foreground">Jenis obat cacing (opsional)</label>
+            <Input
+              type="text"
+              placeholder="Contoh: Drontal, Combantrin, …"
+              value={bulkDewormTitle}
+              onChange={(e) => setBulkDewormTitle(e.target.value)}
+              className="h-9 max-w-xs"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <form onSubmit={(e) => { e.preventDefault(); handleBulkSetLastForSection("obatCacing"); }} className="flex min-h-[7.5rem] flex-col gap-3 rounded-md border border-border bg-[hsl(var(--status-bg-due-soon))] p-3">
             <p className="text-xs font-medium text-[hsl(var(--status-due-soon))]">Set Last</p>
             <p className="text-[11px] text-muted-foreground">Tanggal pemberian terakhir</p>
+            {savedFeedback?.section === "obatCacing" && savedFeedback?.action === "last" && (
+              <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Sudah tersimpan</p>
+            )}
             <div className="flex flex-1 flex-wrap items-end gap-2">
               <Input type="date" value={bulkSetDate} onChange={(e) => setBulkSetDate(e.target.value)} required className="h-9 w-[10.5rem]" />
-              <Button type="submit" size="sm" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan Last"}</Button>
+              <Button type="submit" size="sm" disabled={pendingBulkAction !== null}>{pendingBulkAction?.section === "obatCacing" && pendingBulkAction?.action === "last" ? "Menyimpan…" : "Simpan Last"}</Button>
             </div>
             </form>
             <form onSubmit={(e) => { e.preventDefault(); handleBulkSetNextDueForSection("obatCacing"); }} className="flex min-h-[7.5rem] flex-col gap-3 rounded-md border border-border bg-[hsl(var(--status-bg-ok))] p-3">
             <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Set Next due</p>
             <p className="text-[11px] text-muted-foreground">Jadwal pemberian berikutnya</p>
+            {savedFeedback?.section === "obatCacing" && savedFeedback?.action === "next" && (
+              <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Sudah tersimpan</p>
+            )}
             <div className="flex flex-1 flex-wrap items-end gap-2">
               <Input type="date" value={bulkNextDueDate} onChange={(e) => setBulkNextDueDate(e.target.value)} required className="h-9 w-[10.5rem]" />
-              <Button type="submit" size="sm" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan Next due"}</Button>
+              <Button type="submit" size="sm" disabled={pendingBulkAction !== null}>{pendingBulkAction?.section === "obatCacing" && pendingBulkAction?.action === "next" ? "Menyimpan…" : "Simpan Next due"}</Button>
             </div>
             </form>
           </div>
@@ -540,21 +653,37 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
               Batal pilih
             </Button>
           </div>
-          <div className="grid gap-4 border-t pt-3 sm:grid-cols-2">
+          <div className="space-y-1 border-t border-border pt-3">
+            <label className="text-xs font-medium text-muted-foreground">Jenis obat kutu (opsional)</label>
+            <Input
+              type="text"
+              placeholder="Contoh: Frontline, Revolution, …"
+              value={bulkFleaTitle}
+              onChange={(e) => setBulkFleaTitle(e.target.value)}
+              className="h-9 max-w-xs"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <form onSubmit={(e) => { e.preventDefault(); handleBulkSetLastForSection("obatKutu"); }} className="flex min-h-[7.5rem] flex-col gap-3 rounded-md border border-border bg-[hsl(var(--status-bg-due-soon))] p-3">
             <p className="text-xs font-medium text-[hsl(var(--status-due-soon))]">Set Last</p>
             <p className="text-[11px] text-muted-foreground">Tanggal pemberian terakhir</p>
+            {savedFeedback?.section === "obatKutu" && savedFeedback?.action === "last" && (
+              <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Sudah tersimpan</p>
+            )}
             <div className="flex flex-1 flex-wrap items-end gap-2">
               <Input type="date" value={bulkSetDate} onChange={(e) => setBulkSetDate(e.target.value)} required className="h-9 w-[10.5rem]" />
-              <Button type="submit" size="sm" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan Last"}</Button>
+              <Button type="submit" size="sm" disabled={pendingBulkAction !== null}>{pendingBulkAction?.section === "obatKutu" && pendingBulkAction?.action === "last" ? "Menyimpan…" : "Simpan Last"}</Button>
             </div>
             </form>
             <form onSubmit={(e) => { e.preventDefault(); handleBulkSetNextDueForSection("obatKutu"); }} className="flex min-h-[7.5rem] flex-col gap-3 rounded-md border border-border bg-[hsl(var(--status-bg-ok))] p-3">
             <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Set Next due</p>
             <p className="text-[11px] text-muted-foreground">Jadwal pemberian berikutnya</p>
+            {savedFeedback?.section === "obatKutu" && savedFeedback?.action === "next" && (
+              <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Sudah tersimpan</p>
+            )}
             <div className="flex flex-1 flex-wrap items-end gap-2">
               <Input type="date" value={bulkNextDueDate} onChange={(e) => setBulkNextDueDate(e.target.value)} required className="h-9 w-[10.5rem]" />
-              <Button type="submit" size="sm" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan Next due"}</Button>
+              <Button type="submit" size="sm" disabled={pendingBulkAction !== null}>{pendingBulkAction?.section === "obatKutu" && pendingBulkAction?.action === "next" ? "Menyimpan…" : "Simpan Next due"}</Button>
             </div>
             </form>
           </div>
@@ -571,21 +700,37 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
               Batal pilih
             </Button>
           </div>
-          <div className="grid gap-4 border-t pt-3 sm:grid-cols-2">
+          <div className="space-y-1 border-t border-border pt-3">
+            <label className="text-xs font-medium text-muted-foreground">Jenis vaksin (opsional)</label>
+            <Input
+              type="text"
+              placeholder="Contoh: F3, F4, Rabies, …"
+              value={bulkVaccineTitle}
+              onChange={(e) => setBulkVaccineTitle(e.target.value)}
+              className="h-9 max-w-xs"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <form onSubmit={(e) => { e.preventDefault(); handleBulkSetLastForSection("vaksin"); }} className="flex min-h-[7.5rem] flex-col gap-3 rounded-md border border-border bg-[hsl(var(--status-bg-due-soon))] p-3">
             <p className="text-xs font-medium text-[hsl(var(--status-due-soon))]">Set Last</p>
             <p className="text-[11px] text-muted-foreground">Tanggal pemberian terakhir</p>
+            {savedFeedback?.section === "vaksin" && savedFeedback?.action === "last" && (
+              <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Sudah tersimpan</p>
+            )}
             <div className="flex flex-1 flex-wrap items-end gap-2">
               <Input type="date" value={bulkSetDate} onChange={(e) => setBulkSetDate(e.target.value)} required className="h-9 w-[10.5rem]" />
-              <Button type="submit" size="sm" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan Last"}</Button>
+              <Button type="submit" size="sm" disabled={pendingBulkAction !== null}>{pendingBulkAction?.section === "vaksin" && pendingBulkAction?.action === "last" ? "Menyimpan…" : "Simpan Last"}</Button>
             </div>
             </form>
             <form onSubmit={(e) => { e.preventDefault(); handleBulkSetNextDueForSection("vaksin"); }} className="flex min-h-[7.5rem] flex-col gap-3 rounded-md border border-border bg-[hsl(var(--status-bg-ok))] p-3">
             <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Set Next due</p>
             <p className="text-[11px] text-muted-foreground">Jadwal pemberian berikutnya</p>
+            {savedFeedback?.section === "vaksin" && savedFeedback?.action === "next" && (
+              <p className="text-xs font-medium text-[hsl(var(--status-ok))]">Sudah tersimpan</p>
+            )}
             <div className="flex flex-1 flex-wrap items-end gap-2">
               <Input type="date" value={bulkNextDueDate} onChange={(e) => setBulkNextDueDate(e.target.value)} required className="h-9 w-[10.5rem]" />
-              <Button type="submit" size="sm" disabled={isPending}>{isPending ? "Menyimpan…" : "Simpan Next due"}</Button>
+              <Button type="submit" size="sm" disabled={pendingBulkAction !== null}>{pendingBulkAction?.section === "vaksin" && pendingBulkAction?.action === "next" ? "Menyimpan…" : "Simpan Next due"}</Button>
             </div>
             </form>
           </div>
@@ -741,11 +886,11 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
       )}
 
       {activeTab === "obatCacing" && (
-      <section>
+      <section className="w-full min-w-0">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Obat cacing
         </h2>
-        <TableBox>
+        <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -814,16 +959,16 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
               })}
             </tbody>
           </table>
-        </TableBox>
+        </div>
       </section>
       )}
 
       {activeTab === "obatKutu" && (
-      <section>
+      <section className="w-full min-w-0">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Obat kutu
         </h2>
-        <TableBox>
+        <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -892,16 +1037,16 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
               })}
             </tbody>
           </table>
-        </TableBox>
+        </div>
       </section>
       )}
 
       {activeTab === "vaksin" && (
-      <section>
+      <section className="w-full min-w-0">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Vaksin
         </h2>
-        <TableBox>
+        <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -970,9 +1115,11 @@ export function HealthTable({ rows, breeds, admin }: HealthTableProps) {
               })}
             </tbody>
           </table>
-        </TableBox>
+        </div>
       </section>
       )}
+        </div>
+      </div>
     </div>
   );
 }

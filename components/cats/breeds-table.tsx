@@ -83,7 +83,7 @@ export function BreedsTable({ breeds, admin }: BreedsTableProps) {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-background">
+      <div className="w-full min-w-0 overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-border/60 bg-muted/30 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
