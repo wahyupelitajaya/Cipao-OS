@@ -289,6 +289,13 @@ const PREVENTIVE_LABEL: Record<PreventiveType, string> = {
   DEWORM: "Deworm",
 };
 
+/** Label untuk notifikasi & prioritas: "Next Vaksin", "Next Obat Kutu", "Next Obat Cacing" */
+const PREVENTIVE_NEED_LABEL: Record<PreventiveType, string> = {
+  VACCINE: "Next Vaksin",
+  FLEA: "Next Obat Kutu",
+  DEWORM: "Next Obat Cacing",
+};
+
 // Priority alert for the Priority Alerts section
 type AlertSeverity = "critical" | "warning" | "neutral";
 
@@ -312,6 +319,20 @@ interface NotificationItem {
   photoUrl: string | null;
 }
 
+/** Kelas kapsul tanggal: mudah dibaca, tema mewah & soft */
+const DATE_CAPSULE_BY_SEVERITY: Record<AlertSeverity, string> = {
+  critical:
+    "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium tracking-wide bg-rose-50/95 text-rose-700 border border-rose-200/70 shadow-sm",
+  warning:
+    "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium tracking-wide bg-amber-50/95 text-amber-800 border border-amber-200/70 shadow-sm",
+  neutral:
+    "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium tracking-wide bg-slate-100/90 text-slate-700 border border-slate-200/60",
+};
+
+/** Kapsul tanggal untuk notifikasi terbaru (soft & mewah) */
+const DATE_CAPSULE_NOTIFICATION =
+  "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium tracking-wide bg-slate-100/90 text-slate-700 border border-slate-200/60 shadow-sm";
+
 function buildPriorityAlerts(
   cats: DashboardCatRecord[],
   lowStockPanel: DashboardData["lowStockPanel"],
@@ -329,7 +350,7 @@ function buildPriorityAlerts(
       items.push({
         id: key,
         severity: "critical",
-        title: `${PREVENTIVE_LABEL[p.type as PreventiveType]} Terlambat`,
+        title: PREVENTIVE_NEED_LABEL[p.type as PreventiveType],
         description: cat.name,
         date: p.nextDueDate,
         href: `/cats/${cat.id}?returnTo=/dashboard`,
@@ -378,7 +399,7 @@ function buildRecentNotifications(
       if (!isDueWithin(p.nextDueDate, today, NOTIFICATION_WINDOW_DAYS)) continue;
       items.push({
         id: `due-${cat.id}-${p.type}`,
-        title: `${PREVENTIVE_LABEL[p.type as PreventiveType]} jatuh tempo`,
+        title: PREVENTIVE_NEED_LABEL[p.type as PreventiveType],
         description: cat.name,
         date: p.nextDueDate,
         href: `/cats/${cat.id}?returnTo=/dashboard`,
@@ -685,7 +706,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
                         <p className="text-xs text-muted-foreground">{alert.description}</p>
                       </div>
                       {alert.date && (
-                        <span className="shrink-0 text-xs text-muted-foreground">
+                        <span className={cn(DATE_CAPSULE_BY_SEVERITY[alert.severity])}>
                           {formatDateShort(alert.date)}
                         </span>
                       )}
@@ -750,7 +771,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
                         <p className="text-sm font-medium text-foreground leading-tight">{notif.title}</p>
                         <p className="text-xs text-muted-foreground">{notif.description}</p>
                       </div>
-                      <span className="shrink-0 text-xs text-muted-foreground">
+                      <span className={DATE_CAPSULE_NOTIFICATION}>
                         {formatDateShort(notif.date)}
                       </span>
                     </>
