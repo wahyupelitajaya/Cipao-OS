@@ -1,29 +1,98 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// VERIFY TOKEN: bebas kamu tentukan (nanti disamakan di Meta dashboard)
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN!;
-
-// 1) Verifikasi webhook (Meta akan request GET hub.challenge)
+/**
+ * GET: Verifikasi webhook Meta.
+ * Meta memanggil: ?hub.mode=subscribe&hub.verify_token=XXX&hub.challenge=YYY
+ * Response harus 200 dengan body = challenge (plain text).
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-
   const mode = searchParams.get("hub.mode");
-  const token = searchParams.get("hub.verify_token");
+  const tokenFromMeta = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token === VERIFY_TOKEN && challenge) {
-    return new NextResponse(challenge, { status: 200 });
+  if (mode !== "subscribe") {
+    return NextResponse.json({ error: "Bad mode" }, { status: 400 });
   }
 
-  return NextResponse.json({ error: "Invalid verify token" }, { status: 403 });
+  // Baca env di dalam request (penting di Vercel serverless)
+  const expectedToken = (process.env.WHATSAPP_VERIFY_TOKEN ?? "").trim();
+  const receivedToken = (tokenFromMeta ?? "").trim();
+
+  if (!expectedToken) {
+    return NextResponse.json(
+      { error: "WHATSAPP_VERIFY_TOKEN not set. Add it in Vercel → Settings → Environment Variables, then redeploy." },
+      { status: 503 },
+    );
+  }
+  if (receivedToken !== expectedToken) {
+    return NextResponse.json({ error: "Verify token mismatch" }, { status: 403 });
+  }
+  if (challenge == null || String(challenge).trim() === "") {
+    return NextResponse.json({ error: "Missing challenge" }, { status: 400 });
+  }
+
+  return new NextResponse(String(challenge), {
+    status: 200,
+    headers: { "Content-Type": "text/plain" },
+  });
 }
 
-// 2) Event pesan masuk (Meta akan POST ke sini)
+/** Time slot dari jam sekarang (perkiraan WIB). */
+function getTimeSlot(): string {
+  const h = (new Date().getUTCHours() + 7 + 24) % 24;
+  if (h >= 5 && h < 11) return "Pagi";
+  if (h >= 11 && h < 15) return "Siang";
+  if (h >= 15 && h < 18) return "Sore";
+  return "Malam";
+}
+
+/**
+ * POST: Pesan masuk dari WhatsApp Cloud API → simpan ke daily_activities.
+ */
 export async function POST(req: NextRequest) {
-  const payload = await req.json();
+  try {
+    const body = await req.json();
+    if (body?.object !== "whatsapp_business_account" || !Array.isArray(body.entry)) {
+      return NextResponse.json({ ok: true });
+    }
 
-  // sementara: log untuk debug (cek di Vercel Logs)
-  console.log("WA_WEBHOOK_PAYLOAD:", JSON.stringify(payload));
+    const today = new Date().toISOString().slice(0, 10);
+    const timeSlot = getTimeSlot();
 
-  return NextResponse.json({ ok: true }, { status: 200 });
+    for (const entry of body.entry) {
+      const changes = entry.changes;
+      if (!Array.isArray(changes)) continue;
+      for (const change of changes) {
+        if (change?.field !== "messages" || !change?.value?.messages) continue;
+        for (const msg of change.value.messages) {
+          if (msg.type !== "text" || !msg.text?.body) continue;
+          const text = String(msg.text.body).trim();
+          if (!text) continue;
+          const from = msg.from ?? "unknown";
+          const note = `[WhatsApp] ${from}: ${text}`;
+
+          try {
+            const { createSupabaseAdminClient } = await import("@/lib/supabaseAdmin");
+            const supabase = createSupabaseAdminClient();
+            await supabase.from("daily_activities").insert({
+              date: today,
+              time_slots: [timeSlot],
+              locations: ["Rumah"],
+              categories: [],
+              cat_ids: [],
+              activity_type: "Lainnya",
+              note,
+              created_by: null,
+            });
+          } catch (e) {
+            console.error("[WhatsApp webhook] insert error:", e);
+          }
+        }
+      }
+    }
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
 }
