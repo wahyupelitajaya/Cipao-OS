@@ -93,7 +93,7 @@ export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
       .map((r) => ({ catId: r.cat.id, logId: r.last?.id ?? null }));
     const formData = new FormData();
     formData.set("date", bulkDate);
-    formData.set("payload", JSON.stringify(items));
+    formData.set("payload", JSON.stringify({ items }));
     startTransition(async () => {
       await bulkSetGroomingDate(formData);
       setSelectedIds(new Set());

@@ -28,7 +28,15 @@ if (typeof process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY === "string") {
   );
 }
 
+/** Optional env: hanya dipakai untuk webhook (mis. WhatsApp) yang perlu bypass RLS. */
+function getOptionalEnv(key: string): string | undefined {
+  const value = process.env[key]?.trim();
+  return value === undefined || value === "" ? undefined : value;
+}
+
 export const env = {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
+  /** Service role key (server-only). Diperlukan untuk webhook WhatsApp agar bisa insert Activity tanpa auth. */
+  SUPABASE_SERVICE_ROLE_KEY: getOptionalEnv("SUPABASE_SERVICE_ROLE_KEY"),
 } as const;

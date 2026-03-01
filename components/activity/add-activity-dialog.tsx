@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { addActivityForm } from "@/app/actions/activity";
 import { getFriendlyMessage } from "@/lib/errors";
-import { ACTIVITY_CATEGORIES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 interface AddActivityDialogProps {
@@ -23,8 +22,20 @@ interface AddActivityDialogProps {
 }
 
 const TIME_SLOTS = ["Pagi", "Siang", "Sore", "Malam"] as const;
-const LOCATIONS = ["Rumah", "Toko"] as const;
-const CATEGORIES = [...ACTIVITY_CATEGORIES];
+const LOCATIONS = ["Toko", "Rumah"] as const;
+
+/** Warna capsule soft per opsi — kesan mewah */
+const LOCATION_CAPSULE: Record<string, string> = {
+  Toko: "bg-sky-50 text-sky-700 border-sky-200/80 hover:bg-sky-100/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60 dark:hover:bg-sky-900/40",
+  Rumah: "bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60 dark:hover:bg-emerald-900/40",
+};
+
+const TIME_CAPSULE: Record<string, string> = {
+  Pagi: "bg-amber-50 text-amber-700 border-amber-200/80 hover:bg-amber-100/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60 dark:hover:bg-amber-900/40",
+  Siang: "bg-yellow-50 text-yellow-700 border-yellow-200/80 hover:bg-yellow-100/80 dark:bg-yellow-950/40 dark:text-yellow-300 dark:border-yellow-800/60 dark:hover:bg-yellow-900/40",
+  Sore: "bg-orange-50 text-orange-700 border-orange-200/80 hover:bg-orange-100/80 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60 dark:hover:bg-orange-900/40",
+  Malam: "bg-indigo-50 text-indigo-700 border-indigo-200/80 hover:bg-indigo-100/80 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60 dark:hover:bg-indigo-900/40",
+};
 
 function defaultTimeSlots(): Set<string> {
   const h = new Date().getHours();
@@ -46,7 +57,6 @@ export function AddActivityDialog({
   const [error, setError] = useState<string | null>(null);
   const [timeSlots, setTimeSlots] = useState<Set<string>>(defaultTimeSlots);
   const [locations, setLocations] = useState<Set<string>>(new Set(["Rumah"]));
-  const [categories, setCategories] = useState<Set<string>>(new Set());
 
   const toggleTimeSlot = useCallback((t: string) => {
     setTimeSlots((prev) => {
@@ -76,20 +86,6 @@ export function AddActivityDialog({
     else setLocations(new Set(LOCATIONS));
   }, [locations.size]);
 
-  const toggleCategory = useCallback((c: string) => {
-    setCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(c)) next.delete(c);
-      else next.add(c);
-      return next;
-    });
-  }, []);
-
-  const selectAllCategories = useCallback(() => {
-    if (categories.size === CATEGORIES.length) setCategories(new Set());
-    else setCategories(new Set(CATEGORIES));
-  }, [categories.size]);
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -107,13 +103,12 @@ export function AddActivityDialog({
     formData.set("date", date);
     formData.set("time_slots", JSON.stringify(Array.from(timeSlots)));
     formData.set("locations", JSON.stringify(Array.from(locations)));
-    formData.set("categories", JSON.stringify(Array.from(categories)));
+    formData.set("categories", JSON.stringify([]));
     try {
       await addActivityForm(formData);
       setOpen(false);
       setTimeSlots(defaultTimeSlots());
       setLocations(new Set(["Rumah"]));
-      setCategories(new Set());
       form.reset();
       onSuccess?.();
       router.refresh();
@@ -128,7 +123,7 @@ export function AddActivityDialog({
     if (!next) {
       setTimeSlots(defaultTimeSlots());
       setLocations(new Set(["Rumah"]));
-      setCategories(new Set());
+      setError(null);
     }
     setOpen(next);
   }
@@ -140,73 +135,116 @@ export function AddActivityDialog({
           Tambah aktivitas
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Tambah aktivitas</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3 text-sm">
+        <form onSubmit={handleSubmit} className="space-y-5 text-sm">
           <input type="hidden" name="date" value={date} />
+
+          {/* Lokasi — capsule, soft, font elegan */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Waktu (bisa pilih lebih dari satu)</label>
-              <button type="button" onClick={selectAllTimeSlots} className="text-xs font-medium text-muted-foreground underline hover:text-foreground">
-                {timeSlots.size === TIME_SLOTS.length ? "Batal pilih semua" : "Pilih semua"}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {TIME_SLOTS.map((t) => (
-                <label key={t} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-2 hover:bg-muted">
-                  <input type="checkbox" checked={timeSlots.has(t)} onChange={() => toggleTimeSlot(t)} className="h-4 w-4 rounded border-border" />
-                  <span className="text-foreground">{t}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Lokasi (bisa pilih lebih dari satu)</label>
-              <button type="button" onClick={selectAllLocations} className="text-xs font-medium text-muted-foreground underline hover:text-foreground">
+              <label className="font-elegant text-xs font-medium italic tracking-wide text-muted-foreground">
+                Lokasi
+              </label>
+              <button
+                type="button"
+                onClick={selectAllLocations}
+                className="text-xs font-medium text-muted-foreground underline hover:text-foreground"
+              >
                 {locations.size === LOCATIONS.length ? "Batal pilih semua" : "Pilih semua"}
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
               {LOCATIONS.map((l) => (
-                <label key={l} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-2 hover:bg-muted">
-                  <input type="checkbox" checked={locations.has(l)} onChange={() => toggleLocation(l)} className="h-4 w-4 rounded border-border" />
-                  <span className="text-foreground">{l}</span>
+                <label
+                  key={l}
+                  className={cn(
+                    "font-elegant cursor-pointer rounded-full border px-4 py-2 text-sm font-medium italic tracking-wide transition-colors",
+                    LOCATION_CAPSULE[l] ?? "bg-muted/50 text-muted-foreground border-border",
+                    locations.has(l) && "ring-2 ring-offset-2 ring-sky-400/50 dark:ring-sky-500/50",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={locations.has(l)}
+                    onChange={() => toggleLocation(l)}
+                    className="sr-only"
+                  />
+                  {l}
                 </label>
               ))}
             </div>
           </div>
+
+          {/* Waktu — capsule, soft */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Kategori (bisa pilih lebih dari satu)</label>
-              <button type="button" onClick={selectAllCategories} className="text-xs font-medium text-muted-foreground underline hover:text-foreground">
-                {categories.size === CATEGORIES.length ? "Batal pilih semua" : "Pilih semua"}
+              <label className="font-elegant text-xs font-medium italic tracking-wide text-muted-foreground">
+                Waktu
+              </label>
+              <button
+                type="button"
+                onClick={selectAllTimeSlots}
+                className="text-xs font-medium text-muted-foreground underline hover:text-foreground"
+              >
+                {timeSlots.size === TIME_SLOTS.length ? "Batal pilih semua" : "Pilih semua"}
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((c) => (
-                <label key={c} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-2 hover:bg-muted">
-                  <input type="checkbox" checked={categories.has(c)} onChange={() => toggleCategory(c)} className="h-4 w-4 rounded border-border" />
-                  <span className="text-foreground">{c}</span>
+              {TIME_SLOTS.map((t) => (
+                <label
+                  key={t}
+                  className={cn(
+                    "font-elegant cursor-pointer rounded-full border px-4 py-2 text-sm font-medium italic tracking-wide transition-colors",
+                    TIME_CAPSULE[t] ?? "bg-muted/50 text-muted-foreground border-border",
+                    timeSlots.has(t) && "ring-2 ring-offset-2 ring-amber-400/50 dark:ring-amber-500/50",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={timeSlots.has(t)}
+                    onChange={() => toggleTimeSlot(t)}
+                    className="sr-only"
+                  />
+                  {t}
                 </label>
               ))}
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Catatan (opsional, bisa banyak paragraf)</label>
+
+          {/* Deskripsi — isi manual, bisa paragraf baru */}
+          <div className="space-y-1.5">
+            <label
+              htmlFor="add-activity-note"
+              className="font-elegant text-xs font-medium italic tracking-wide text-muted-foreground"
+            >
+              Deskripsi
+            </label>
             <textarea
+              id="add-activity-note"
               name="note"
-              placeholder="Tulis catatan, bisa beberapa paragraf..."
+              placeholder="Tulis deskripsi aktivitas… Bisa beberapa paragraf."
               rows={5}
-              className="flex w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-soft outline-none placeholder:text-muted-foreground focus:border-foreground/40 focus:ring-1 focus:ring-foreground/10 min-h-[100px]"
+              className="flex w-full resize-y rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground shadow-sm outline-none placeholder:text-muted-foreground focus:border-foreground/40 focus:ring-1 focus:ring-foreground/10 min-h-[100px]"
             />
           </div>
-          {error && <p className="text-xs text-[hsl(var(--status-overdue))]">{error}</p>}
+
+          {error && (
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Batal</Button>
-            <Button type="submit" size="sm" disabled={pending || timeSlots.size === 0 || locations.size === 0}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={pending || timeSlots.size === 0 || locations.size === 0}
+            >
               {pending ? "Menyimpan…" : "Simpan"}
             </Button>
           </div>

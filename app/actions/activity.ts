@@ -53,6 +53,20 @@ const ACTIVITY_TYPE_TO_ENGLISH: Record<string, string> = {
   "Lainnya": "Other",
 };
 
+/** Tampilkan tipe aktivitas dalam bahasa Indonesia (DB bisa menyimpan Inggris di lingkungan lama). */
+const ACTIVITY_TYPE_DISPLAY: Record<string, string> = {
+  "Other": "Lainnya",
+  "Clean Cage": "Bersih Kandang",
+  "Nail Trim": "Potong Kuku",
+  "Brush": "Sisir",
+  "Ear Cleaning": "Bersih Telinga",
+  "Deworming": "Obat Cacing",
+  "Flea Treatment": "Obat Kutu",
+  "Bath": "Mandi",
+  "Medication Given": "Pemberian Obat",
+  "General Check": "Pemeriksaan Umum",
+};
+
 /** Get calendar summary for a month: which days are visited / partial / none. */
 export async function getMonthActivitySummary(
   year: number,
@@ -161,14 +175,17 @@ export async function getDayActivities(
       .in("id", allCatIds);
     (catRows ?? []).forEach((c: { id: string; name: string }) => catNameMap.set(c.id, c.name));
   }
+  const skipDisplay = (s: string) => !s || s === "Other" || s === "—" || s.trim() === "";
+  const cleanJoin = (arr: string[] | null | undefined) =>
+    (arr ?? []).filter((x: string) => !skipDisplay(x)).map((x: string) => x.trim()).join(", ");
   const activities: DayActivityItem[] = rows.map((r) => ({
     id: r.id,
     date: r.date,
-    time_slots: (r.time_slots ?? []).join(", "),
-    locations: (r.locations ?? []).join(", "),
-    categories: (r.categories ?? []).join(", "),
-    cat_names: (r.cat_ids ?? []).length === 0 ? "—" : (r.cat_ids ?? []).map((id) => catNameMap.get(id) ?? "—").join(", "),
-    activity_type: r.activity_type ?? "—",
+    time_slots: cleanJoin(r.time_slots),
+    locations: cleanJoin(r.locations),
+    categories: cleanJoin(r.categories),
+    cat_names: "",
+    activity_type: "Lainnya",
     note: r.note,
     created_at: r.created_at,
   }));

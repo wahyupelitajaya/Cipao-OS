@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,26 @@ function formatDateLabel(iso: string): string {
     month: "short",
     year: "numeric",
   });
+}
+
+/** Warna kapsul soft per waktu — selalu terang, menyesuaikan jenis */
+const TIME_CAPSULE_CLASS: Record<string, string> = {
+  Pagi: "bg-amber-50 text-amber-700/90",
+  Siang: "bg-yellow-50 text-yellow-700/90",
+  Sore: "bg-orange-50 text-orange-700/90",
+  Malam: "bg-indigo-50 text-indigo-700/90",
+};
+
+/** Warna kapsul soft per lokasi — selalu terang */
+const LOCATION_CAPSULE_CLASS: Record<string, string> = {
+  Toko: "bg-sky-50 text-sky-700/90",
+  Rumah: "bg-emerald-50 text-emerald-700/90",
+};
+
+function getCapsuleClass(value: string, map: Record<string, string>): string {
+  const base = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium tracking-wide";
+  const theme = map[value.trim()] ?? "bg-neutral-50 text-neutral-600/90";
+  return `${base} ${theme}`;
 }
 
 
@@ -253,18 +273,38 @@ export function ActivityDayPanel({
                       <span className="text-muted-foreground">·</span>
                     </>
                   )}
-                  <span className="font-medium text-muted-foreground">{a.time_slots}</span>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground">{a.locations}</span>
-                  {a.categories && (
-                    <>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-muted-foreground">{a.categories}</span>
-                    </>
-                  )}
-                  <span className="text-muted-foreground">·</span>
-                  <span className="font-medium text-foreground">{a.cat_names}</span>
-                  <span className="text-foreground">{a.activity_type}</span>
+                  {(() => {
+                    const tsRaw = (a.time_slots || "").trim();
+                    const locRaw = (a.locations || "").trim();
+                    const cat = (a.categories || "").trim();
+                    const hide = (s: string) => !s || s === "Other" || s === "—";
+                    const parts: React.ReactNode[] = [];
+                    const timeValues = tsRaw ? tsRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+                    const locValues = locRaw ? locRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+                    timeValues.forEach((t, i) => {
+                      if (!hide(t)) {
+                        parts.push(
+                          <span key={`t-${i}`} className={getCapsuleClass(t, TIME_CAPSULE_CLASS)}>
+                            {t}
+                          </span>,
+                        );
+                      }
+                    });
+                    locValues.forEach((l, i) => {
+                      if (!hide(l)) {
+                        parts.push(
+                          <span key={`l-${i}`} className={getCapsuleClass(l, LOCATION_CAPSULE_CLASS)}>
+                            {l}
+                          </span>,
+                        );
+                      }
+                    });
+                    if (!hide(cat)) parts.push(<span key="c" className="text-muted-foreground">{cat}</span>);
+                    return parts.length === 0 ? null : parts.reduce<ReactNode[]>((acc, node, i) =>
+                      i === 0 ? [node] : [...acc, <span key={`d${i}`} className="text-muted-foreground/60 mx-1">·</span>, node],
+                      [],
+                    );
+                  })()}
                   {a.note && (
                     <span className="block w-full whitespace-pre-wrap text-muted-foreground">{a.note}</span>
                   )}

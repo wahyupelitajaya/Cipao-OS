@@ -217,11 +217,24 @@ export async function deleteWeightLog(formData: FormData) {
   revalidateHealth();
 }
 
-export async function addGroomingLog(formData: FormData) {
-  await requireAdminOrGroomer();
+/** Returns { error?: string } so the client can show it in-dialog without triggering error boundary. */
+export async function addGroomingLog(formData: FormData): Promise<{ error?: string }> {
+  try {
+    await requireAdminOrGroomer();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Anda tidak punya akses.";
+    return { error: msg };
+  }
 
-  const catId = getString(formData, "cat_id", { required: true });
-  const date = requireDate(formData, "date", "Tanggal");
+  let catId: string;
+  let date: string;
+  try {
+    catId = getString(formData, "cat_id", { required: true });
+    date = requireDate(formData, "date", "Tanggal");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Data tidak valid.";
+    return { error: msg };
+  }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("grooming_logs").insert({
@@ -229,17 +242,25 @@ export async function addGroomingLog(formData: FormData) {
     date,
   });
 
-  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  if (error) return { error: error.message };
 
   revalidateCat(catId);
   revalidateGrooming();
+  return {};
 }
 
 export async function updateGroomingLog(formData: FormData) {
   await requireAdminOrGroomer();
 
-  const id = getString(formData, "id", { required: true });
-  const date = requireDate(formData, "date", "Tanggal");
+  let id: string;
+  let date: string;
+  try {
+    id = getString(formData, "id", { required: true });
+    date = requireDate(formData, "date", "Tanggal");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Data tidak valid.";
+    throw new AppError(ErrorCode.VALIDATION_ERROR, msg);
+  }
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase

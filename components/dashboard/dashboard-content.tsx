@@ -120,16 +120,41 @@ function parseSmartSearch(query: string): {
   if (q.includes("turun") || q.includes("berat turun")) return { mode: "weight_drop" };
 
   // ---- Preventif: vaksin / cacing / kutu (belum, perlu, terlambat, dll) ----
-  if (
+  const isVaccineQuery =
     q.includes("vaksin") ||
     q.includes("vaccine") ||
     q.includes("belum vaksin") ||
     q.includes("perlu vaksin") ||
     q.includes("terlambat vaksin") ||
     q.includes("belum rabies") ||
-    q.includes("perlu rabies")
-  ) {
-    const keyword = q.includes("rabies") ? "rabies" : q.includes("triple") || q.includes("f3") || q.includes("f4") ? "triple" : undefined;
+    q.includes("perlu rabies") ||
+    q.includes("belum pernah") ||
+    q.includes("belum f4") ||
+    q.includes("belum f3") ||
+    q.includes("belum dapat") ||
+    q.includes("yang belum f4") ||
+    q.includes("yang belum f3") ||
+    q.includes("yang belum rabies") ||
+    q.includes("tidak pernah vaksin") ||
+    q.includes("tidak punya f4") ||
+    q.includes("tidak punya f3") ||
+    q.includes("tidak punya rabies") ||
+    q.includes("perlu f4") ||
+    q.includes("perlu f3") ||
+    q.includes("terlambat f4") ||
+    q.includes("terlambat f3") ||
+    q === "f4" ||
+    q === "f3" ||
+    q === "rabies" ||
+    (q.includes("f4") && (q.includes("belum") || q.includes("perlu") || q.includes("terlambat") || q.includes("pernah") || q.includes("dapat"))) ||
+    (q.includes("f3") && (q.includes("belum") || q.includes("perlu") || q.includes("terlambat") || q.includes("pernah") || q.includes("dapat"))) ||
+    (q.includes("rabies") && (q.includes("belum") || q.includes("perlu") || q.includes("terlambat") || q.includes("pernah") || q.includes("dapat")));
+  if (isVaccineQuery) {
+    // Keyword dipakai untuk cocokkan lastTitle (F4, F3, RABIES di DB) — tampilkan kucing yang TIDAK punya vaksin tersebut
+    let keyword: string | undefined;
+    if (q.includes("f4")) keyword = "f4";
+    else if (q.includes("f3") || q.includes("triple")) keyword = "f3";
+    else if (q.includes("rabies")) keyword = "rabies";
     return { mode: "preventive", preventiveType: "VACCINE", keyword };
   }
   if (
