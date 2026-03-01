@@ -52,9 +52,15 @@ export const HEALTH_TYPE_LABELS: Record<HealthType, string> = {
   NOTE: "Catatan",
 };
 
-// --- Vaccine ---
+// --- Vaccine / Obat kutu / Obat cacing (jenis untuk health log) ---
 export const VACCINE_TYPES = ["F3", "F4", "RABIES"] as const;
 export type VaccineType = (typeof VACCINE_TYPES)[number];
+
+export const FLEA_TYPES = ["Frontline", "Revolution", "Seresto", "Lainnya"] as const;
+export type FleaType = (typeof FLEA_TYPES)[number];
+
+export const DEWORM_TYPES = ["Drontal", "Profender", "Drontal Plus", "Lainnya"] as const;
+export type DewormType = (typeof DEWORM_TYPES)[number];
 
 // --- Preventive care intervals (in months) ---
 /** Months to add for automatic next_due_date calculation */

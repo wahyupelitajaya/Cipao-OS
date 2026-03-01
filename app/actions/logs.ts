@@ -110,6 +110,36 @@ export async function addWeightLog(formData: FormData) {
   revalidateHealth();
 }
 
+export async function bulkAddWeightLog(formData: FormData) {
+  await requireAdmin();
+
+  const catIds = getJsonStringArray(formData, "cat_ids");
+  if (catIds.length === 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih minimal satu kucing.");
+  }
+  if (catIds.length > BULK_MAX_IDS) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, `Maksimal ${BULK_MAX_IDS} kucing sekaligus.`);
+  }
+
+  const date = requireDate(formData, "date", "Tanggal");
+  const weight = getWeightKg(formData, "weight_kg");
+
+  const supabase = await createSupabaseServerClient();
+  for (const catId of catIds) {
+    const { error } = await supabase.from("weight_logs").insert({
+      cat_id: catId,
+      date,
+      weight_kg: weight,
+    });
+    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  }
+
+  revalidateHealth();
+  for (const catId of catIds) {
+    revalidateCat(catId);
+  }
+}
+
 export async function addGroomingLog(formData: FormData) {
   await requireAdminOrGroomer();
 
