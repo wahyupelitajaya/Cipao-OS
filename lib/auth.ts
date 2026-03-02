@@ -10,48 +10,39 @@ export interface Profile {
 }
 
 /**
- * Safely get the current session and profile.
+ * Safely get the current user and profile.
+ * Uses getUser() (not getSession()) so the user is validated by the Supabase Auth server.
  *
  * IMPORTANT: This function NEVER throws. It always returns a result.
- * - If the user is not logged in (no cookie / expired token): session=null, profile=null
- * - If the user IS logged in but the profile query fails (DB error, rate limit, timeout):
- *   session is returned but profile=null. The CALLER must check session to distinguish
- *   "not logged in" from "logged in but profile fetch failed".
+ * - If the user is not logged in: session=null, profile=null
+ * - If the user IS logged in but the profile query fails: session with user, profile=null.
  */
 export async function getSessionProfile() {
   try {
     const supabase = await createSupabaseServerClient();
 
-    // 1. Read session from cookie — this does NOT make a network call to Supabase.
-    //    It simply reads the JWT from the cookie set by the proxy.
-    const { data, error: sessionError } = await supabase.auth.getSession();
+    // 1. Validate user with Auth server (recommended over getSession() which only reads from cookies).
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (sessionError || !data.session?.user) {
-      // No valid session cookie → user is genuinely not logged in
+    if (userError || !user) {
       return { session: null, profile: null };
     }
 
-    const session = data.session;
+    const session = { user };
 
-    // 2. We have a valid session. Now fetch the profile from DB.
-    //    If this fails (rate limit, timeout, etc.), we still return the session
-    //    so the caller knows the user IS authenticated — just the profile is missing.
+    // 2. Fetch profile from DB.
     try {
       const { data: profile } = await supabase
         .from("profiles")
         .select("id,email,role")
-        .eq("id", session.user.id)
+        .eq("id", user.id)
         .maybeSingle();
 
       return { session, profile: profile as Profile | null };
     } catch {
-      // DB error — user is authenticated but we can't fetch their profile right now.
-      // Return session so the caller knows NOT to redirect to login.
       return { session, profile: null };
     }
   } catch {
-    // Outermost safety net: if even createSupabaseServerClient() or cookies() throws,
-    // return null gracefully instead of crashing the request.
     return { session: null, profile: null };
   }
 }

@@ -17,16 +17,16 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Jika ada session tapi tidak ada di profiles (akun dihapus dari DB), sign out dan tampilkan error.
+  // Jika ada user (validasi lewat getUser()) tapi tidak ada di profiles, sign out dan tampilkan error.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (cancelled || !session?.user) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled || !user) return;
       const { data: profile } = await supabase
         .from("profiles")
         .select("id")
-        .eq("id", session.user.id)
+        .eq("id", user.id)
         .maybeSingle();
       if (cancelled) return;
       if (!profile) {
@@ -70,8 +70,8 @@ function LoginForm() {
       }
     }
 
-    // Pastikan session sudah tersimpan di cookie sebelum redirect.
-    await supabase.auth.getSession();
+    // Validasi user dengan server sebelum redirect.
+    await supabase.auth.getUser();
 
     const redirectTo = searchParams.get("redirectTo");
     const destination =
