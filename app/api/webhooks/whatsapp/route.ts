@@ -39,9 +39,19 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** Time slot dari jam sekarang (perkiraan WIB). */
+/** Tanggal hari ini dalam WITA (UTC+8) supaya cocok dengan halaman Aktivitas. */
+function todayWITA(): string {
+  const now = new Date();
+  const wita = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const y = wita.getUTCFullYear();
+  const m = String(wita.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(wita.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Time slot dari jam sekarang (perkiraan WITA). */
 function getTimeSlot(): string {
-  const h = (new Date().getUTCHours() + 7 + 24) % 24;
+  const h = (new Date().getUTCHours() + 8 + 24) % 24;
   if (h >= 5 && h < 11) return "Pagi";
   if (h >= 11 && h < 15) return "Siang";
   if (h >= 15 && h < 18) return "Sore";
@@ -58,7 +68,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayWITA();
     const timeSlot = getTimeSlot();
     let saved = 0;
 
