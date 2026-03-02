@@ -48,17 +48,20 @@ export async function GET(req: NextRequest) {
     const timeSlot = getTimeSlot();
     const note = `[WhatsApp] 6200000000000: Pesan tes koneksi WA → Activity (${new Date().toISOString()})`;
 
-    const { error } = await supabase.from("daily_activities").insert({
+    const row = {
       date: today,
       time_slots: [timeSlot],
       locations: ["Rumah"],
       categories: [],
       cat_ids: [],
-      activity_type: "Lainnya",
       note,
       created_by: null,
-    });
+    };
 
+    let error = (await supabase.from("daily_activities").insert({ ...row, activity_type: "Lainnya" })).error;
+    if (error?.code === "23514" && error?.message?.includes("activity_type_check")) {
+      error = (await supabase.from("daily_activities").insert({ ...row, activity_type: "Other" })).error;
+    }
     if (error) {
       return NextResponse.json(
         { ok: false, error: "Gagal insert ke Supabase.", detail: error.message },

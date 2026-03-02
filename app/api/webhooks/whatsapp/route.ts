@@ -87,18 +87,21 @@ export async function POST(req: NextRequest) {
           try {
             const { createSupabaseAdminClient } = await import("@/lib/supabaseAdmin");
             const supabase = createSupabaseAdminClient();
-            const { error } = await supabase.from("daily_activities").insert({
+            const row = {
               date: today,
               time_slots: [timeSlot],
               locations: ["Rumah"],
               categories: [],
               cat_ids: [],
-              activity_type: "Lainnya",
               note,
               created_by: null,
-            });
-            if (!error) saved++;
-            else console.error("[WhatsApp webhook] insert error:", error.message);
+            };
+            let err = (await supabase.from("daily_activities").insert({ ...row, activity_type: "Lainnya" })).error;
+            if (err?.code === "23514" && err?.message?.includes("activity_type_check")) {
+              err = (await supabase.from("daily_activities").insert({ ...row, activity_type: "Other" })).error;
+            }
+            if (!err) saved++;
+            else console.error("[WhatsApp webhook] insert error:", err.message);
           } catch (e) {
             console.error("[WhatsApp webhook] insert error:", e);
           }
