@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Check, Copy, AlertCircle, MessageCircle, Play, Settings2, BookOpen, FlaskConical, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { testWhatsAppMessageInsert } from "@/app/actions/whatsapp-test";
-import { sendWhatsAppMessage } from "@/app/actions/whatsapp-send";
+import { sendWhatsAppMessage, type SentMessageRow } from "@/app/actions/whatsapp-send";
 
 const CONTOH_PESAN = `Selasa, 3 Maret 2026
 
@@ -19,6 +20,7 @@ interface WhatsAppSetupProps {
   hasVerifyToken: boolean;
   hasServiceRoleKey: boolean;
   hasSendConfig: boolean;
+  sentMessages: SentMessageRow[];
 }
 
 export function WhatsAppSetup({
@@ -26,7 +28,9 @@ export function WhatsAppSetup({
   hasVerifyToken,
   hasServiceRoleKey,
   hasSendConfig,
+  sentMessages,
 }: WhatsAppSetupProps) {
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [sendTo, setSendTo] = useState("");
   const [sendBody, setSendBody] = useState("");
@@ -191,16 +195,39 @@ Pagi Toko :
         </p>
       </section>
 
-      {/* 3. Kirim pesan (dari nomor Business ke nomor lain) */}
+      {/* 3. Chat: kirim pesan + riwayat */}
       {hasSendConfig && (
         <section className="rounded-xl border border-border/60 bg-muted/20 p-6 space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
             <Send className="h-4 w-4" />
-            Kirim pesan (dari nomor Business)
+            Chat (kirim dari nomor Business)
           </h2>
           <p className="text-sm text-muted-foreground">
-            Kirim pesan ke nomor lain sebagai nomor WhatsApp Business yang terdaftar di API. Nomor tujuan: format 62xxx (tanpa +). Penerima harus pernah mengirim pesan ke nomor Business Anda dalam 24 jam terakhir.
+            Nomor tujuan format 62xxx. Penerima harus pernah mengirim pesan ke nomor Business Anda dalam 24 jam terakhir. Pesan terkirim tampil di bawah.
           </p>
+
+          {/* Riwayat chat: pesan terkirim (bubble kanan) */}
+          <div className="rounded-lg border border-border bg-background/80 min-h-[200px] max-h-[360px] overflow-y-auto flex flex-col p-3">
+            {sentMessages.length === 0 ? (
+              <p className="text-sm text-muted-foreground self-center py-8">Belum ada pesan terkirim. Kirim pesan pertama di bawah.</p>
+            ) : (
+              <div className="space-y-2">
+                {[...sentMessages].reverse().map((msg) => (
+                  <div key={msg.id} className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2 text-primary-foreground text-sm shadow-sm">
+                      <p className="text-xs opacity-90 mb-0.5">Ke {msg.to_number}</p>
+                      <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                      <p className="text-[10px] opacity-75 mt-1 text-right">
+                        {new Date(msg.sent_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Form kirim */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Nomor tujuan (62xxx)</label>
             <Input
@@ -217,7 +244,7 @@ Pagi Toko :
               value={sendBody}
               onChange={(e) => setSendBody(e.target.value)}
               placeholder="Tulis pesan..."
-              rows={4}
+              rows={3}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
@@ -231,6 +258,9 @@ Pagi Toko :
                 startSendTransition(async () => {
                   const res = await sendWhatsAppMessage(sendTo.trim(), sendBody.trim());
                   setSendResult(res);
+                  if (res.ok) {
+                    router.refresh();
+                  }
                 });
               }}
               className="gap-1.5"
@@ -239,19 +269,9 @@ Pagi Toko :
               {sendPending ? "Mengirim…" : "Kirim"}
             </Button>
           </div>
-          {sendResult && (
-            <div
-              className={`rounded-md border px-3 py-2 text-sm ${
-                sendResult.ok
-                  ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
-                  : "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
-              }`}
-            >
-              {sendResult.ok ? (
-                <p className="font-medium text-green-800 dark:text-green-200">Pesan terkirim.</p>
-              ) : (
-                <p className="text-amber-800 dark:text-amber-200">{sendResult.error}</p>
-              )}
+          {sendResult && !sendResult.ok && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              {sendResult.error}
             </div>
           )}
         </section>

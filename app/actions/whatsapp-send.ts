@@ -1,6 +1,7 @@
 "use server";
 
 import { getSessionProfile, isAdmin } from "@/lib/auth";
+import { createSupabaseServerClient } from "@/lib/supabaseClient";
 
 const META_API_VERSION = "v18.0";
 const SEND_URL = (phoneNumberId: string) =>
@@ -61,9 +62,35 @@ export async function sendWhatsAppMessage(
       return { ok: false, error: msg };
     }
     const messageId = data?.messages?.[0]?.id;
+
+    try {
+      const supabase = await createSupabaseServerClient();
+      await supabase.from("whatsapp_sent_messages").insert({
+        to_number: normalizedTo,
+        body: text,
+      });
+    } catch {
+      // jangan gagalkan kirim jika simpan riwayat gagal
+    }
+
     return { ok: true, messageId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, error: msg };
   }
+}
+
+export type SentMessageRow = { id: string; to_number: string; body: string; sent_at: string };
+
+/** Riwayat pesan terkirim (untuk tampilan chat). Admin only. */
+export async function getWhatsAppSentMessages(limit = 100): Promise<SentMessageRow[]> {
+  const { session, profile } = await getSessionProfile();
+  if (!session || !isAdmin(profile)) return [];
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("whatsapp_sent_messages")
+    .select("id, to_number, body, sent_at")
+    .order("sent_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as SentMessageRow[];
 }

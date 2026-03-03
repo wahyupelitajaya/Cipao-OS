@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionProfile, isAdmin } from "@/lib/auth";
+import { getWhatsAppSentMessages } from "@/app/actions/whatsapp-send";
 import { WhatsAppSetup } from "@/components/whatsapp/whatsapp-setup";
 
 export default async function WhatsAppPage() {
@@ -17,6 +18,7 @@ export default async function WhatsAppPage() {
   const hasSendConfig =
     !!(process.env.WHATSAPP_ACCESS_TOKEN ?? "").trim() &&
     !!(process.env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim();
+  const sentMessages = hasSendConfig ? await getWhatsAppSentMessages(100) : [];
 
   return (
     <div className="space-y-6">
@@ -34,6 +36,7 @@ export default async function WhatsAppPage() {
         hasVerifyToken={hasVerifyToken}
         hasServiceRoleKey={hasServiceRoleKey}
         hasSendConfig={hasSendConfig}
+        sentMessages={sentMessages}
       />
     </div>
   );
