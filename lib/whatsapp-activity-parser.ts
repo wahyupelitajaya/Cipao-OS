@@ -85,12 +85,12 @@ function parseDateFromFirstLine(line: string): { date: string; restOfLine: strin
       return { date: `${year}-${monthStr}-${dayStr}`, restOfLine: "" };
     }
   }
-  // Baris diawali tanggal lalu ada teks lain (format satu baris dari WA)
+  // Baris diawali tanggal lalu ada teks lain (format satu baris dari WA). [\s\S]* = .* inkl. newline (tanpa flag s).
   const prefixWithWeekday = trimmed.match(
-    /^(?:Senin|Selasa|Rabu|Kamis|Jumat|Sabtu|Minggu|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[\s,\uFF0C]+(\d{1,2})[\s]+(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember|January|February|March|April|May|June|July|August|September|October|November|December)[\s]+(\d{4})\s+(.*)$/is,
+    /^(?:Senin|Selasa|Rabu|Kamis|Jumat|Sabtu|Minggu|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[\s,\uFF0C]+(\d{1,2})[\s]+(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember|January|February|March|April|May|June|July|August|September|October|November|December)[\s]+(\d{4})\s+([\s\S]*)$/i,
   );
   const prefixWithoutWeekday = trimmed.match(
-    /^(\d{1,2})[\s]+(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember|January|February|March|April|May|June|July|August|September|October|November|December)[\s]+(\d{4})\s+(.*)$/is,
+    /^(\d{1,2})[\s]+(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember|January|February|March|April|May|June|July|August|September|October|November|December)[\s]+(\d{4})\s+([\s\S]*)$/i,
   );
   m = prefixWithWeekday ?? prefixWithoutWeekday;
   if (m) {
