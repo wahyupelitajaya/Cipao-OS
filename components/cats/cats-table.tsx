@@ -128,13 +128,17 @@ function StatusBadge({
     activeTreatmentCatIds?.has(cat.id) ||
     cat.status === "sakit" ||
     cat.status === "memburuk";
-  const displayStatus = inDirawat ? (cat.status ?? "sehat") : "sehat";
-  const label = statusLabel(displayStatus);
-  const variant =
-    ["sehat", "membaik", "memburuk", "hampir_sembuh", "observasi", "sakit"].includes(displayStatus)
-      ? displayStatus
-      : "sehat";
-  return <Badge variant={variant as "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit"}>{label}</Badge>;
+  if (inDirawat) {
+    return (
+      <Link
+        href="/health?tab=dirawat"
+        className="inline-flex rounded-full border border-amber-200/80 bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-200 hover:underline"
+      >
+        Sedang dirawat
+      </Link>
+    );
+  }
+  return <Badge variant="sehat">Sehat</Badge>;
 }
 
 function BreedCountSummary({
@@ -478,7 +482,7 @@ export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [], sor
             <tbody>
               {cats.map((cat, index) => {
                 const inDirawat = activeTreatmentSet.has(cat.id) || cat.status === "sakit" || cat.status === "memburuk";
-                const displayStatus = inDirawat ? (cat.status ?? "sehat") : "sehat";
+                const displayLabel = inDirawat ? "Sedang dirawat" : "Sehat";
                 return (
                   <tr key={cat.id}>
                     <td>{index + 1}</td>
@@ -488,14 +492,9 @@ export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [], sor
                     <td>{formatAge(cat.dob)}</td>
                     <td className={cn(
                       "cats-print-status",
-                      displayStatus === "sehat" && "cats-print-status--sehat",
-                      displayStatus === "membaik" && "cats-print-status--membaik",
-                      displayStatus === "hampir_sembuh" && "cats-print-status--hampir_sembuh",
-                      displayStatus === "observasi" && "cats-print-status--observasi",
-                      displayStatus === "memburuk" && "cats-print-status--memburuk",
-                      displayStatus === "sakit" && "cats-print-status--sakit",
+                      inDirawat ? "cats-print-status--sakit" : "cats-print-status--sehat",
                     )}>
-                      {statusLabel(displayStatus)}
+                      {displayLabel}
                     </td>
                     <td className={cn(
                       "cats-print-lokasi",
