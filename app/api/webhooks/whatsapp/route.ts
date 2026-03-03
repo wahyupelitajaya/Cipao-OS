@@ -305,7 +305,7 @@ export async function POST(req: NextRequest) {
 
               // Map teks kondisi bebas → nilai dirawat_status yang valid.
               const statusTokens = kondisiPart
-                ? statusPart
+                ? kondisiPart
                     .split(/[,\s/]+/)
                     .map((s) => s.trim())
                     .filter((s) => s.length > 0)

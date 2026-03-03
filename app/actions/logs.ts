@@ -67,7 +67,7 @@ export async function deleteHealthLog(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const { data: log, error: fetchError } = await supabase
     .from("health_logs")
-    .select("cat_id")
+    .select("cat_id, title, type")
     .eq("id", id)
     .single();
 
@@ -81,6 +81,12 @@ export async function deleteHealthLog(formData: FormData) {
 
   revalidateCat(log.cat_id);
   revalidateHealth();
+  appendActivityLog({
+    action: "delete",
+    entity_type: "health_log",
+    entity_id: id,
+    summary: `Menghapus log kesehatan: ${log.title ?? ""} (${log.type ?? ""})`,
+  }).catch(() => {});
 }
 
 export async function bulkAddHealthLog(formData: FormData) {
@@ -204,6 +210,12 @@ export async function updateWeightLog(formData: FormData) {
 
   revalidateCat(log.cat_id);
   revalidateHealth();
+  appendActivityLog({
+    action: "update",
+    entity_type: "weight_log",
+    entity_id: id,
+    summary: `Memperbarui log berat: ${weight} kg (${date})`,
+  }).catch(() => {});
 }
 
 export async function deleteWeightLog(formData: FormData) {
@@ -214,7 +226,7 @@ export async function deleteWeightLog(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const { data: log, error: fetchError } = await supabase
     .from("weight_logs")
-    .select("cat_id")
+    .select("cat_id, date, weight_kg")
     .eq("id", id)
     .single();
 
@@ -228,6 +240,12 @@ export async function deleteWeightLog(formData: FormData) {
 
   revalidateCat(log.cat_id);
   revalidateHealth();
+  appendActivityLog({
+    action: "delete",
+    entity_type: "weight_log",
+    entity_id: id,
+    summary: `Menghapus log berat: ${log.weight_kg} kg (${log.date})`,
+  }).catch(() => {});
 }
 
 /** Returns { error?: string } so the client can show it in-dialog without triggering error boundary. */
