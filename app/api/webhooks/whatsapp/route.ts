@@ -2,6 +2,64 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { todayWITA, parseWhatsAppActivityMessage } from "@/lib/whatsapp-activity-parser";
 
+/** Tambah interval ke tanggal (YYYY-MM-DD) berdasarkan teks interval. Contoh: "sebulan", "3 bulan", "seminggu". */
+function addIntervalToDate(baseDate: string, intervalRaw: string): string | null {
+  const trimmed = String(intervalRaw).trim().toLowerCase();
+  if (!baseDate || !trimmed) return null;
+
+  const [y, m, d] = baseDate.split("-").map((v) => parseInt(v, 10));
+  if (!y || !m || !d) return null;
+  const date = new Date(y, m - 1, d);
+
+  // Minggu / hari → tambah hari.
+  const weekMatch = trimmed.match(/^(\d+)?\s*(minggu|pekan)$/);
+  const dayMatch = trimmed.match(/^(\d+)?\s*hari$/);
+  if (weekMatch) {
+    const n = weekMatch[1] ? parseInt(weekMatch[1], 10) : 1;
+    if (Number.isFinite(n) && n > 0) {
+      date.setDate(date.getDate() + n * 7);
+    }
+  } else if (dayMatch) {
+    const n = dayMatch[1] ? parseInt(dayMatch[1], 10) : 1;
+    if (Number.isFinite(n) && n > 0) {
+      date.setDate(date.getDate() + n);
+    }
+  } else {
+    // Bulan / tahun → tambah bulan.
+    const monthMatch = trimmed.match(/^(\d+)?\s*bulan$/);
+    const yearMatch = trimmed.match(/^(\d+)?\s*tahun$/);
+    if (monthMatch) {
+      const n = monthMatch[1] ? parseInt(monthMatch[1], 10) : 1;
+      if (Number.isFinite(n) && n > 0) {
+        date.setMonth(date.getMonth() + n);
+      }
+    } else if (yearMatch) {
+      const n = yearMatch[1] ? parseInt(yearMatch[1], 10) : 1;
+      if (Number.isFinite(n) && n > 0) {
+        date.setFullYear(date.getFullYear() + n);
+      }
+    } else {
+      // Kata umum: sebulan, setahun, seminggu (fallback jika tidak kena pola angka).
+      if (trimmed === "sebulan") {
+        date.setMonth(date.getMonth() + 1);
+      } else if (trimmed === "setahun") {
+        date.setFullYear(date.getFullYear() + 1);
+      } else if (trimmed === "seminggu") {
+        date.setDate(date.getDate() + 7);
+      } else if (trimmed === "3 bulan") {
+        date.setMonth(date.getMonth() + 3);
+      } else {
+        return null;
+      }
+    }
+  }
+
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
 /**
  * GET: Verifikasi webhook Meta.
  * Meta memanggil: ?hub.mode=subscribe&hub.verify_token=XXX&hub.challenge=YYY
@@ -106,64 +164,399 @@ export async function POST(req: NextRequest) {
               continue;
             }
 
-            // 2) Pesan diawali kata "grooming" → cari nama kucing dan buat grooming_logs, tanpa membuat activity.
-            const lower = normalizedNote;
-            const isGroomingCommand = lower.startsWith("grooming ");
+            const commandText = String(rawNote).trim();
+            const commandLower = commandText.toLowerCase();
+
+            // Helper: ambil daftar kucing aktif dan fungsi cocok nama.
+            async function getCatMatcher() {
+              const { data: cats, error: catsError } = await supabase
+                .from("cats")
+                .select("id, name")
+                .eq("is_active", true);
+              if (catsError) {
+                console.error("[WhatsApp webhook] fetch cats error:", catsError.message);
+                return null;
+              }
+              const list = (cats ?? []) as { id: string; name: string }[];
+              const normalizedCats = list.map((c) => ({
+                id: c.id,
+                nameLower: c.name.trim().toLowerCase(),
+              }));
+              return (tokenRaw: string) => {
+                const tokenLower = tokenRaw.trim().toLowerCase();
+                if (!tokenLower) return null;
+                const match = normalizedCats.find((c) => c.nameLower.includes(tokenLower));
+                return match?.id ?? null;
+              };
+            }
+
+            // 2) Obat cacing / obat kutu / vaksin → preventive logs dengan jadwal berikutnya.
+            const isDeworm = commandLower.startsWith("obat cacing");
+            const isFlea = commandLower.startsWith("obat kutu");
+            const isVaccine = commandLower.startsWith("vaksin");
+            if (isDeworm || isFlea || isVaccine) {
+              const parts = commandText
+                .split("-")
+                .map((p) => p.trim())
+                .filter((p) => p.length > 0);
+              const namesPart = parts[1] ?? "";
+              const drugPart = parts[2] ?? "";
+              const intervalPart = parts[3] ?? "";
+
+              const nameTokens = namesPart
+                .split(/[,\n]/)
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0);
+              if (nameTokens.length === 0) {
+                continue;
+              }
+
+              const matchCatId = await getCatMatcher();
+              if (!matchCatId) {
+                continue;
+              }
+
+              const catIds = new Set<string>();
+              for (const token of nameTokens) {
+                const id = matchCatId(token);
+                if (id) catIds.add(id);
+              }
+              if (catIds.size === 0) {
+                continue;
+              }
+
+              const nextDue = intervalPart ? addIntervalToDate(activityDate, intervalPart) : null;
+              const type = isDeworm ? "DEWORM" : isFlea ? "FLEA" : "VACCINE";
+              const baseTitle = isDeworm ? "Obat cacing" : isFlea ? "Obat kutu" : "Vaksin";
+              const title = drugPart ? `${baseTitle} - ${drugPart.trim()}` : baseTitle;
+              const details = intervalPart
+                ? `Jadwal berikutnya: ${intervalPart.trim()}`
+                : null;
+
+              const rows = Array.from(catIds).map((catId) => ({
+                cat_id: catId,
+                date: activityDate,
+                type,
+                title,
+                details,
+                next_due_date: nextDue,
+                is_active_treatment: false,
+              }));
+
+              const { error: hlError } = await supabase.from("health_logs").insert(rows);
+              if (hlError) {
+                console.error("[WhatsApp webhook] health_logs insert error:", hlError.message);
+              } else {
+                saved++;
+                await supabase.from("activity_log").insert({
+                  user_id: null,
+                  action: "create",
+                  entity_type: "health_log",
+                  summary: `${baseTitle} via WhatsApp untuk ${catIds.size} kucing pada ${activityDate}`,
+                });
+              }
+
+              // Tidak membuat daily_activities untuk perintah preventive.
+              continue;
+            }
+
+            // 3) Dirawat: "dirawat - cipao - sedang - sakit kaki" → tambah NOTE "Dalam perawatan" + dirawat_status.
+            const isDirawat = commandLower.startsWith("dirawat");
+            if (isDirawat) {
+              const parts = commandText
+                .split("-")
+                .map((p) => p.trim())
+                .filter((p) => p.length > 0);
+              const namesPart = parts[1] ?? "";
+              const statusPart = (parts[2] ?? "").toLowerCase();
+              const notePart = parts[3] ?? (parts[2] ?? "");
+
+              const nameTokens = namesPart
+                .split(/[,\n]/)
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0);
+              if (nameTokens.length === 0) {
+                continue;
+              }
+
+              const matchCatId = await getCatMatcher();
+              if (!matchCatId) {
+                continue;
+              }
+              const catIds = new Set<string>();
+              for (const token of nameTokens) {
+                const id = matchCatId(token);
+                if (id) catIds.add(id);
+              }
+              if (catIds.size === 0) {
+                continue;
+              }
+
+              // Map teks status bebas → nilai dirawat_status yang valid.
+              const statusTokens = statusPart
+                ? statusPart
+                    .split(/[,\s/]+/)
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0)
+                : [];
+              const dirawatValues = new Set<string>();
+              for (const t of statusTokens) {
+                if (t === "parah") dirawatValues.add("parah");
+                else if (t === "sedang") dirawatValues.add("sedang");
+                else if (t === "ringan") dirawatValues.add("ringan");
+                else if (t === "seger" || t === "segar" || t === "membaik") dirawatValues.add("seger");
+                else if (t === "lemes" || t === "lemah") dirawatValues.add("lemes");
+                else if (t === "makan" || t === "mau_makan") dirawatValues.add("mau_makan");
+                else if (t === "tidak_makan" || t === "ga_mau_makan" || t === "gak_mau_makan" || t === "tdk_mau_makan") {
+                  dirawatValues.add("tidak_mau_makan");
+                }
+              }
+
+              const rows = Array.from(catIds).map((catId) => ({
+                cat_id: catId,
+                date: activityDate,
+                type: "NOTE" as const,
+                title: "Dalam perawatan",
+                details: notePart ? notePart.trim() : null,
+                next_due_date: null,
+                is_active_treatment: true,
+              }));
+
+              const { error: hlError } = await supabase.from("health_logs").insert(rows);
+              if (hlError) {
+                console.error("[WhatsApp webhook] dirawat logs insert error:", hlError.message);
+              } else {
+                saved++;
+                await supabase.from("activity_log").insert({
+                  user_id: null,
+                  action: "create",
+                  entity_type: "health_log",
+                  summary: `Menandai ${catIds.size} kucing sebagai Dirawat via WhatsApp pada ${activityDate}`,
+                });
+              }
+
+              if (dirawatValues.size > 0) {
+                const allowed = [
+                  "tidak_ada_perubahan",
+                  "ada_perubahan",
+                  "parah",
+                  "sedang",
+                  "ringan",
+                  "mau_makan",
+                  "tidak_mau_makan",
+                  "lemes",
+                  "seger",
+                ];
+                const finalStatuses = Array.from(dirawatValues).filter((v) => allowed.includes(v));
+                if (finalStatuses.length > 0) {
+                  const { error: catErr } = await supabase
+                    .from("cats")
+                    .update({ dirawat_status: finalStatuses })
+                    .in("id", Array.from(catIds));
+                  if (catErr) {
+                    console.error("[WhatsApp webhook] update cats.dirawat_status error:", catErr.message);
+                  } else {
+                    await supabase.from("activity_log").insert({
+                      user_id: null,
+                      action: "update",
+                      entity_type: "cat",
+                      summary: `Update dirawat_status (${finalStatuses.join(", ")}) untuk ${catIds.size} kucing via WhatsApp`,
+                    });
+                  }
+                }
+              }
+
+              // Tidak membuat daily_activities untuk perintah dirawat.
+              continue;
+            }
+
+            // 4) Pesan diawali kata "grooming" → cari nama kucing dan buat grooming_logs, tanpa membuat activity.
+            //    Mendukung dua format:
+            //    - "grooming cipao, celo"
+            //    - "grooming - cipao, celo"
+            const isGroomingCommand = commandLower.startsWith("grooming");
             if (isGroomingCommand) {
-              // Ambil teks setelah kata "grooming"
-              const namesRaw = lower.replace(/^grooming\s+/, "");
-              // Pisah dengan koma atau spasi, buang kosong
-              const nameTokens = namesRaw
+              // Ambil bagian setelah kata "grooming"
+              const afterKeyword = commandText.replace(/^grooming\s*/i, "");
+              // Jika ada tanda "-", buang sampai "-" pertama agar format "grooming - cipao" juga didukung
+              const namesSegment = afterKeyword.includes("-")
+                ? afterKeyword.split("-").slice(1).join("-").trim()
+                : afterKeyword.trim();
+              const nameTokens = namesSegment
                 .split(/[,\n]/)
                 .map((s) => s.trim())
                 .filter((s) => s.length > 0);
 
               if (nameTokens.length > 0) {
-                const { data: cats, error: catsError } = await supabase
-                  .from("cats")
-                  .select("id, name")
-                  .eq("is_active", true);
-
-                if (catsError) {
-                  console.error("[WhatsApp webhook] fetch cats error:", catsError.message);
-                } else {
-                  const matchedIds = new Set<string>();
-                  const catList = (cats ?? []) as { id: string; name: string }[];
-                  const normalizedCats = catList.map((c) => ({
-                    id: c.id,
-                    name: c.name,
-                    nameLower: c.name.trim().toLowerCase(),
-                  }));
-
-                  for (const token of nameTokens) {
-                    const tokenLower = token.toLowerCase();
-                    // Cari nama kucing yang mengandung token (case-insensitive)
-                    const match = normalizedCats.find((c) => c.nameLower.includes(tokenLower));
-                    if (match) {
-                      matchedIds.add(match.id);
+                const matchCatId = await getCatMatcher();
+                  if (matchCatId) {
+                    const matchedIds = new Set<string>();
+                    for (const token of nameTokens) {
+                      const id = matchCatId(token);
+                      if (id) matchedIds.add(id);
+                    }
+                    if (matchedIds.size > 0) {
+                      const inserts = Array.from(matchedIds).map((catId) => ({
+                        cat_id: catId,
+                        date: activityDate,
+                      }));
+                      const { error: groomError } = await supabase.from("grooming_logs").insert(inserts);
+                      if (groomError) {
+                        console.error("[WhatsApp webhook] grooming_logs insert error:", groomError.message);
+                      } else {
+                        saved++;
+                        await supabase.from("activity_log").insert({
+                          user_id: null,
+                          action: "create",
+                          entity_type: "grooming_log",
+                          summary: `Grooming via WhatsApp untuk ${matchedIds.size} kucing pada ${activityDate}`,
+                        });
+                      }
                     }
                   }
-
-                  if (matchedIds.size > 0) {
-                    const inserts = Array.from(matchedIds).map((catId) => ({
-                      cat_id: catId,
-                      date: activityDate,
-                    }));
-                    const { error: groomError } = await supabase.from("grooming_logs").insert(inserts);
-                    if (groomError) {
-                      console.error("[WhatsApp webhook] grooming_logs insert error:", groomError.message);
-                    } else {
-                      saved++;
-                    }
-                  }
-                }
               }
 
               // Tidak membuat daily_activities untuk perintah grooming.
               continue;
             }
 
-            // 3) Default: pesan biasa → simpan ke daily_activities seperti sebelumnya.
+            // 5) Berat badan: "berat - cipao - 3.2" → weight_logs (tanpa activity).
+            const isWeight = commandLower.startsWith("berat");
+            if (isWeight) {
+              const parts = commandText
+                .split("-")
+                .map((p) => p.trim())
+                .filter((p) => p.length > 0);
+              const namesPart = parts[1] ?? "";
+              const weightPart = parts[2] ?? "";
+
+              const nameTokens = namesPart
+                .split(/[,\n]/)
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0);
+              if (nameTokens.length === 0 || !weightPart) {
+                continue;
+              }
+
+              const weightNum = parseFloat(weightPart.replace(",", "."));
+              if (!Number.isFinite(weightNum) || weightNum <= 0) {
+                continue;
+              }
+
+              const matchCatId = await getCatMatcher();
+              if (!matchCatId) {
+                continue;
+              }
+              const catIds = new Set<string>();
+              for (const token of nameTokens) {
+                const id = matchCatId(token);
+                if (id) catIds.add(id);
+              }
+              if (catIds.size === 0) {
+                continue;
+              }
+
+              const rows = Array.from(catIds).map((catId) => ({
+                cat_id: catId,
+                date: activityDate,
+                weight_kg: weightNum,
+              }));
+
+              const { error: wError } = await supabase.from("weight_logs").insert(rows);
+              if (wError) {
+                console.error("[WhatsApp webhook] weight_logs insert error:", wError.message);
+              } else {
+                saved++;
+                await supabase.from("activity_log").insert({
+                  user_id: null,
+                  action: "create",
+                  entity_type: "weight_log",
+                  summary: `Log berat via WhatsApp (${weightNum} kg) untuk ${catIds.size} kucing pada ${activityDate}`,
+                });
+              }
+
+              // Tidak membuat daily_activities untuk perintah berat.
+              continue;
+            }
+
+            // 6) Inventory: "inventory - beli - whiskas basah - 5 - pcs" → inventory_movements.
+            const isInventory = commandLower.startsWith("inventory");
+            if (isInventory) {
+              const parts = commandText
+                .split("-")
+                .map((p) => p.trim())
+                .filter((p) => p.length > 0);
+              const reasonPart = (parts[1] ?? "").toLowerCase();
+              const namePart = parts[2] ?? "";
+              const qtyPart = parts[3] ?? "";
+              const unitPart = parts[4] ?? "";
+
+              if (!reasonPart || !namePart || !qtyPart) {
+                continue;
+              }
+
+              let reason: "PURCHASE" | "USAGE" | "ADJUSTMENT" | null = null;
+              if (reasonPart.includes("beli") || reasonPart === "purchase") reason = "PURCHASE";
+              else if (reasonPart.includes("pakai") || reasonPart.includes("keluar") || reasonPart === "usage") reason = "USAGE";
+              else if (reasonPart.includes("adjust") || reasonPart.includes("selisih")) reason = "ADJUSTMENT";
+
+              if (!reason) {
+                continue;
+              }
+
+              const qtyNum = parseFloat(qtyPart.replace(",", "."));
+              if (!Number.isFinite(qtyNum) || qtyNum === 0) {
+                continue;
+              }
+
+              const { data: items, error: itemsError } = await supabase
+                .from("inventory_items")
+                .select("id, name, unit");
+
+              if (itemsError) {
+                console.error("[WhatsApp webhook] fetch inventory_items error:", itemsError.message);
+                continue;
+              }
+
+              const list = (items ?? []) as { id: string; name: string; unit: string }[];
+              const nameLower = namePart.toLowerCase();
+              const matchItem = list.find((it) => it.name.trim().toLowerCase().includes(nameLower));
+              if (!matchItem) {
+                continue;
+              }
+
+              const delta = reason === "USAGE" ? -Math.abs(qtyNum) : Math.abs(qtyNum);
+              const note =
+                unitPart && unitPart.trim()
+                  ? `${reason === "PURCHASE" ? "Pembelian" : reason === "USAGE" ? "Pemakaian" : "Penyesuaian"} via WhatsApp (${unitPart.trim()})`
+                  : `${reason === "PURCHASE" ? "Pembelian" : reason === "USAGE" ? "Pemakaian" : "Penyesuaian"} via WhatsApp`;
+
+              const { error: mvError } = await supabase.from("inventory_movements").insert({
+                item_id: matchItem.id,
+                date: activityDate,
+                change_qty: delta,
+                reason,
+                note,
+              });
+
+              if (mvError) {
+                console.error("[WhatsApp webhook] inventory_movements insert error:", mvError.message);
+              } else {
+                saved++;
+                await supabase.from("activity_log").insert({
+                  user_id: null,
+                  action: "update",
+                  entity_type: "inventory",
+                  entity_id: matchItem.id,
+                  summary: `Inventory dari WhatsApp: ${matchItem.name} ${delta > 0 ? `+${delta}` : delta} (${reason})`,
+                });
+              }
+
+              // Tidak membuat daily_activities untuk perintah inventory.
+              continue;
+            }
+
+            // 7) Default: pesan biasa → simpan ke daily_activities seperti sebelumnya.
             const row = {
               date: activityDate,
               time_slots: [parsed.timeSlot],
