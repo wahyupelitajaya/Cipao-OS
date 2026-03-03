@@ -108,17 +108,17 @@ const CAPSULE = {
   date: "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100/80 text-slate-600 border border-slate-200/60",
 } as const;
 
-/** Jenis vaksin → label tampilan + kelas kapsul (F3, F4, Rabies mudah dibedakan). */
+/** Jenis vaksin → label tampilan + kelas kapsul (F3=hijau, F4=coklat, Rabies=merah). */
 function getVaccineTypeCapsule(title: string | null | undefined): { label: string; capsuleClass: string } {
   const t = title?.trim().toUpperCase() ?? "";
   if (t === "F3") {
-    return { label: "F3", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-sky-50 text-sky-800 border border-sky-200/80" };
+    return { label: "F3", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/80" };
   }
   if (t === "F4") {
-    return { label: "F4", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-violet-50 text-violet-800 border border-violet-200/80" };
+    return { label: "F4", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80" };
   }
   if (t === "RABIES") {
-    return { label: "Rabies", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80" };
+    return { label: "Rabies", capsuleClass: "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-50 text-red-800 border border-red-200/80" };
   }
   const fallback = title?.trim() || "—";
   return { label: fallback, capsuleClass: CAPSULE.neutral };
@@ -1061,7 +1061,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                     </td>
                     <td className="px-5 py-3 align-middle">
                       <div className="flex flex-col gap-1">
-                        <span className={status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral}>
+                        <span className={cn("w-fit self-start", status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral)}>
                           {status}
                         </span>
                         <span className="text-[10px] text-muted-foreground">{keterangan}</span>
@@ -1143,7 +1143,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                     </td>
                     <td className="px-5 py-3 align-middle">
                       <div className="flex flex-col gap-1">
-                        <span className={status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral}>
+                        <span className={cn("w-fit self-start", status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral)}>
                           {status}
                         </span>
                         <span className="text-[10px] text-muted-foreground">{keterangan}</span>
@@ -1199,13 +1199,25 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                 )}
                 <th className="px-5 py-3 text-left">Cat</th>
                 <th className="min-w-[5rem] px-5 py-3 text-left">Status</th>
-                <th className="min-w-[6rem] px-5 py-3 text-left">Jenis vaksin</th>
-                <th className="min-w-[8rem] px-5 py-3 text-left">Last / Next due</th>
+                <th className="min-w-[7rem] px-2 py-3 text-left">Last</th>
+                <th className="min-w-[6rem] px-2 py-3 text-left">Next due</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => {
                 const { status, keterangan } = getPreventiveStatus(row.lastVaccineLog?.next_due_date ?? null);
+                const log = row.lastVaccineLog;
+                const { label: vaxLabel, capsuleClass: vaxCapsuleClass } = getVaccineTypeCapsule(log?.title);
+                const lastDateStr = log?.date ? formatDateShort(new Date(log.date)) : "—";
+                const nextDue = log?.next_due_date ?? null;
+                const nextDueStr = nextDue ? formatDateShort(new Date(nextDue)) : "—";
+                const nextCapsuleClass = nextDue
+                  ? isOverdue(nextDue)
+                    ? CAPSULE.overdue
+                    : isDueWithin7Days(nextDue)
+                      ? CAPSULE.dueSoon
+                      : CAPSULE.ok
+                  : CAPSULE.neutral;
                 return (
                   <tr key={row.cat.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
                     {admin && (
@@ -1225,27 +1237,44 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                     </td>
                     <td className="px-5 py-3 align-middle">
                       <div className="flex flex-col gap-1">
-                        <span className={status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral}>
+                        <span className={cn("w-fit self-start", status === "Terlambat" ? CAPSULE.overdue : status === "Aman" ? CAPSULE.ok : CAPSULE.neutral)}>
                           {status}
                         </span>
                         <span className="text-[10px] text-muted-foreground">{keterangan}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 align-middle">
-                      {(() => {
-                        const { label, capsuleClass } = getVaccineTypeCapsule(row.lastVaccineLog?.title);
-                        return <span className={capsuleClass}>{label}</span>;
-                      })()}
+                    <td className="px-2 py-3 align-middle">
+                      <div className="min-w-0 flex flex-col gap-1 text-[11px] leading-tight">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={CAPSULE.date}>{lastDateStr}</span>
+                          {admin && log && (
+                            <SetLastDateDialog
+                              logId={log.id}
+                              currentDate={log.date}
+                              catName={row.cat.name}
+                              type="VACCINE"
+                              admin={admin}
+                              triggerLabel="Set Last"
+                            />
+                          )}
+                        </div>
+                        <span className={cn("w-fit self-start", vaxCapsuleClass)}>{vaxLabel}</span>
+                      </div>
                     </td>
-                    <td className="px-5 py-3 align-middle">
-                      <PreventiveCell
-                        log={row.lastVaccineLog}
-                        type="VACCINE"
-                        catId={row.cat.id}
-                        catName={row.cat.name}
-                        admin={admin}
-                        showJenis={false}
-                      />
+                    <td className="px-2 py-3 align-middle">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] leading-tight">
+                        <span className={nextCapsuleClass}>{nextDueStr}</span>
+                        {admin && (
+                          <SetNextDueDialog
+                            catId={row.cat.id}
+                            catName={row.cat.name}
+                            type="VACCINE"
+                            log={log}
+                            admin={admin}
+                            triggerLabel="Set Next"
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1773,7 +1802,6 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                   <th>Nama Kucing</th>
                   <th>Ras | Umur</th>
                   <th>Status</th>
-                  <th>Jenis vaksin</th>
                   <th>Last</th>
                   <th>Next due</th>
                 </tr>
@@ -1783,14 +1811,17 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                   const { status } = getPreventiveStatus(row.lastVaccineLog?.next_due_date ?? null);
                   const log = row.lastVaccineLog;
                   const { label: vaxLabel } = getVaccineTypeCapsule(log?.title);
+                  const lastDatePrint = log ? formatDateShort(new Date(log.date)) : "—";
                   return (
                     <tr key={row.cat.id}>
                       <td>{i + 1}</td>
                       <td className="font-medium">{row.cat.name ?? row.cat.cat_id ?? "—"}</td>
                       <td>{row.cat.breed_id && breedsById.get(row.cat.breed_id)?.name ? breedsById.get(row.cat.breed_id)!.name : "—"} | {formatAge(row.cat.dob)}</td>
                       <td className={cn("health-print-preventive-status", status === "Terlambat" && "health-print-preventive-status--overdue", status === "Aman" && "health-print-preventive-status--ok", status === "—" && "health-print-preventive-status--none")}>{status}</td>
-                      <td className={cn("health-print-vaksin-type", log?.title?.trim().toUpperCase() === "F3" && "health-print-vaksin-type--f3", log?.title?.trim().toUpperCase() === "F4" && "health-print-vaksin-type--f4", log?.title?.trim().toUpperCase() === "RABIES" && "health-print-vaksin-type--rabies")}>{vaxLabel}</td>
-                      <td className="health-berat-print-weight-cell">{log ? formatDateShort(new Date(log.date)) : "—"}</td>
+                      <td className={cn("health-print-vaksin-type", log?.title?.trim().toUpperCase() === "F3" && "health-print-vaksin-type--f3", log?.title?.trim().toUpperCase() === "F4" && "health-print-vaksin-type--f4", log?.title?.trim().toUpperCase() === "RABIES" && "health-print-vaksin-type--rabies")}>
+                        <span className="block">{lastDatePrint}</span>
+                        {log && <span className="block">{vaxLabel}</span>}
+                      </td>
                       <td className="health-berat-print-weight-cell">{log?.next_due_date ? formatDateShort(new Date(log.next_due_date)) : "—"}</td>
                     </tr>
                   );

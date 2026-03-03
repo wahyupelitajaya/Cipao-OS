@@ -251,9 +251,9 @@
   .health-berat-print-table td.health-print-preventive-status--ok { color: #166534 !important; }
   .health-berat-print-table td.health-print-preventive-status--none { color: #737373 !important; }
   .health-print-vaksin-type { font-weight: 500; }
-  .health-berat-print-table td.health-print-vaksin-type--f3 { color: #0369a1 !important; }
-  .health-berat-print-table td.health-print-vaksin-type--f4 { color: #7e22ce !important; }
-  .health-berat-print-table td.health-print-vaksin-type--rabies { color: #b45309 !important; }
+  .health-berat-print-table td.health-print-vaksin-type--f3 { color: #047857 !important; }
+  .health-berat-print-table td.health-print-vaksin-type--f4 { color: #b45309 !important; }
+  .health-berat-print-table td.health-print-vaksin-type--rabies { color: #b91c1c !important; }
   .health-print-dirawat-kondisi { font-weight: 500; }
   .health-berat-print-table td.health-print-dirawat-kondisi--sakit { color: #b91c1c !important; }
   .health-berat-print-table td.health-print-dirawat-kondisi--memburuk { color: #b45309 !important; }
