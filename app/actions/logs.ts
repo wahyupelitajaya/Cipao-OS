@@ -19,6 +19,7 @@ import { todayISO } from "@/lib/dates";
 import { PREVENTIVE_TITLES, PREVENTIVE_INTERVALS } from "@/lib/constants";
 import type { PreventiveType } from "@/lib/constants";
 import { BULK_MAX_IDS } from "@/lib/constants";
+import { appendActivityLog } from "@/app/actions/activity-log";
 
 export async function addHealthLog(formData: FormData) {
   await requireAdmin();
@@ -50,6 +51,12 @@ export async function addHealthLog(formData: FormData) {
 
   revalidateCat(catId);
   revalidateHealth();
+  appendActivityLog({
+    action: "create",
+    entity_type: "health_log",
+    entity_id: catId,
+    summary: `Menambah log kesehatan: ${title} (${type})`,
+  }).catch(() => {});
 }
 
 export async function deleteHealthLog(formData: FormData) {
@@ -132,6 +139,12 @@ export async function addWeightLog(formData: FormData) {
 
   revalidateCat(catId);
   revalidateHealth();
+  appendActivityLog({
+    action: "create",
+    entity_type: "weight_log",
+    entity_id: catId,
+    summary: `Menambah log berat: ${weight} kg`,
+  }).catch(() => {});
 }
 
 export async function bulkAddWeightLog(formData: FormData) {

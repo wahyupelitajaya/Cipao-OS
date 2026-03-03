@@ -22,6 +22,7 @@ import {
   PHOTO_MAX_BYTES,
   PHOTO_ALLOWED_MIME_TYPES,
 } from "@/lib/constants";
+import { appendActivityLog } from "@/app/actions/activity-log";
 
 const DEFAULT_STATUS = "observasi";
 const DEFAULT_LOCATION = "rumah";
@@ -81,6 +82,11 @@ export async function createCat(formData: FormData) {
   }
 
   revalidateCats();
+  appendActivityLog({
+    action: "create",
+    entity_type: "cat",
+    summary: `Menambah kucing: ${name} (${catId})`,
+  }).catch(() => {});
 }
 
 export type CreateCatState =
@@ -108,10 +114,17 @@ export async function deleteCat(formData: FormData) {
   await requireAdmin();
   const id = getString(formData, "id", { required: true });
   const supabase = await createSupabaseServerClient();
+  const { data: cat } = await supabase.from("cats").select("name, cat_id").eq("id", id).maybeSingle();
   const { error } = await supabase.from("cats").delete().eq("id", id);
   if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
   revalidateCat(id);
   revalidateCats();
+  appendActivityLog({
+    action: "delete",
+    entity_type: "cat",
+    entity_id: id,
+    summary: `Menghapus kucing: ${cat?.name ?? cat?.cat_id ?? id}`,
+  }).catch(() => {});
 }
 
 export async function updateCat(formData: FormData) {
@@ -223,6 +236,12 @@ export async function updateCat(formData: FormData) {
   }
 
   revalidateCat(id);
+  appendActivityLog({
+    action: "update",
+    entity_type: "cat",
+    entity_id: id,
+    summary: `Memperbarui kucing: ${name}`,
+  }).catch(() => {});
 }
 
 export async function bulkUpdateCats(formData: FormData) {
@@ -302,6 +321,11 @@ export async function bulkUpdateCats(formData: FormData) {
   for (const id of catIds) {
     revalidateCat(id);
   }
+  appendActivityLog({
+    action: "update",
+    entity_type: "cat",
+    summary: `Memperbarui ${updatedCount} kucing (bulk)`,
+  }).catch(() => {});
 }
 
 type UpdateCatState =

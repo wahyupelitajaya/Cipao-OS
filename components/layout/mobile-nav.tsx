@@ -9,13 +9,14 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const navItems: { href: string; label: string; adminOnly?: boolean }[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/cats", label: "Cats" },
   { href: "/health", label: "Health" },
   { href: "/grooming", label: "Grooming" },
   { href: "/inventory", label: "Inventory" },
-  { href: "/activity", label: "Aktivitas" },
+  { href: "/activity", label: "Activity" },
+  { href: "/log", label: "Log", adminOnly: true },
 ];
 
 interface MobileNavProps {
@@ -26,6 +27,8 @@ interface MobileNavProps {
 export function MobileNav({ email, role }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const admin = role === "admin";
+  const items = navItems.filter((item) => !item.adminOnly || admin);
 
   return (
     <>
@@ -60,7 +63,7 @@ export function MobileNav({ email, role }: MobileNavProps) {
               <span className="truncate text-sm tracking-tight">Cipao OS</span>
             </Link>
             <nav className="mt-6 flex flex-1 flex-col gap-0.5">
-              {navItems.map((item) => {
+              {items.map((item) => {
                 const active =
                   pathname === item.href ||
                   (item.href !== "/dashboard" && pathname.startsWith(item.href));

@@ -36,6 +36,8 @@ export interface DashboardData {
   cats: DashboardCatRecord[];
   groomingPanel: DashboardGroomingEntry[];
   lowStockPanel: DashboardLowStockItem[];
+  /** Keyword suggest untuk pencarian cerdas (dari tabel dashboard_search_keywords). */
+  searchKeywords: string[];
 }
 
 export type SuggestedStatus = "Needs Attention" | "Monitor" | "Healthy";

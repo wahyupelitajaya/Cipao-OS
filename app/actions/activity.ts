@@ -7,6 +7,7 @@ import { revalidateActivity } from "@/lib/revalidate";
 import { requireDate, getOptionalString, getJsonStringArray } from "@/lib/validation";
 import { isValidDateString } from "@/lib/dates";
 import { ACTIVITY_CATEGORIES, BULK_MAX_IDS } from "@/lib/constants";
+import { appendActivityLog } from "@/app/actions/activity-log";
 
 export type DayStatus = "visited" | "partial" | "none" | "not_visited";
 
@@ -299,6 +300,13 @@ export async function setVisitStatus(
   );
   if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
   revalidateActivity();
+  const label = visited ? "Dikunjungi" : "Tidak dikunjungi";
+  appendActivityLog({
+    action: "update",
+    entity_type: "visit_day",
+    entity_id: date,
+    summary: `Status kunjungan ${date}: ${label}`,
+  }).catch(() => {});
 }
 
 /** Hapus status kunjungan untuk suatu tanggal (jadikan "belum dikunjungi"). Admin only. */
@@ -313,6 +321,12 @@ export async function clearVisitStatus(date: string): Promise<void> {
   const { error } = await supabase.from("visit_days").delete().eq("date", date);
   if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
   revalidateActivity();
+  appendActivityLog({
+    action: "update",
+    entity_type: "visit_day",
+    entity_id: date,
+    summary: `Status kunjungan ${date}: Belum dikunjungi (dihapus)`,
+  }).catch(() => {});
 }
 
 /** FormData version for addActivity. Waktu & lokasi multi; tipe satu; kucing opsional. */
@@ -378,6 +392,11 @@ export async function addActivityForm(formData: FormData): Promise<void> {
     }
   }
   revalidateActivity();
+  appendActivityLog({
+    action: "create",
+    entity_type: "daily_activity",
+    summary: `Menambah aktivitas: ${date} (${timeSlotsRaw.join(", ")})`,
+  }).catch(() => {});
 }
 
 /** Delete a single activity. Admin only. */

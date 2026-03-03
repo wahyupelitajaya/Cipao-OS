@@ -1,6 +1,7 @@
 import type { createSupabaseServerClient } from "@/lib/supabaseClient";
 import type { Tables } from "@/lib/types";
 import { buildStatusSuggestion } from "@/lib/cat-status";
+import { DASHBOARD_SEARCH_KEYWORDS } from "@/lib/constants";
 import type {
   DashboardCatRecord,
   DashboardData,
@@ -198,9 +199,23 @@ export async function getDashboardData(
       unit: item.unit,
     }));
 
+  let searchKeywords: string[] = [...DASHBOARD_SEARCH_KEYWORDS];
+  try {
+    const { data: keywordRows } = await supabase
+      .from("dashboard_search_keywords")
+      .select("keyword, sort_order")
+      .order("sort_order", { ascending: true });
+    if (keywordRows && keywordRows.length > 0) {
+      searchKeywords = (keywordRows as { keyword: string }[]).map((r) => r.keyword);
+    }
+  } catch {
+    // Tabel belum ada atau error: pakai fallback dari constants
+  }
+
   return {
     cats: dashboardCats,
     groomingPanel,
     lowStockPanel,
+    searchKeywords,
   };
 }

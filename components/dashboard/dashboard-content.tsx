@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { DUE_SOON_DAYS, NOTIFICATION_WINDOW_DAYS } from "@/lib/constants";
+import { DUE_SOON_DAYS, NOTIFICATION_WINDOW_DAYS, DASHBOARD_SEARCH_KEYWORDS } from "@/lib/constants";
 import type {
   DashboardData,
   DashboardCatRecord,
@@ -58,6 +58,8 @@ function parseSmartSearch(query: string): {
     | "healthy";
   preventiveType?: PreventiveType;
   keyword?: string;
+  /** True = tampilkan yang terlambat (next due sudah lewat) atau belum punya jadwal. */
+  preventiveOverdue?: boolean;
   nameTerms?: string[];
   locationValue?: LocationValue;
 } {
@@ -77,6 +79,9 @@ function parseSmartSearch(query: string): {
   const needBuy =
     q.includes("perlu dibeli") ||
     q.includes("perlu di beli") ||
+    q.includes("butuh dibeli") ||
+    q.includes("butuh di beli") ||
+    (q.includes("butuh") && (q.includes("di beli") || q.includes("dibeli") || q.includes("beli"))) ||
     (q.includes("perlu") && (q.includes("di beli") || q.includes("dibeli") || q.includes("beli")));
   const stockLow =
     q.includes("stok rendah") ||
@@ -113,7 +118,7 @@ function parseSmartSearch(query: string): {
   if (dirawatKeywords) return { mode: "sick" };
 
   // ---- Grooming: belum mandi/grooming ----
-  if (q.includes("grooming") || q.includes("groom") || q.includes("mandi") || q.includes("belum mandi")) return { mode: "grooming" };
+  if (q.includes("belum grooming") || q.includes("grooming") || q.includes("groom") || q.includes("mandi") || q.includes("belum mandi")) return { mode: "grooming" };
 
   // ---- Berat: turun / naik ----
   if (q.includes("berat naik") || q === "naik") return { mode: "weight_gain" };
@@ -155,25 +160,34 @@ function parseSmartSearch(query: string): {
     if (q.includes("f4")) keyword = "f4";
     else if (q.includes("f3") || q.includes("triple")) keyword = "f3";
     else if (q.includes("rabies")) keyword = "rabies";
-    return { mode: "preventive", preventiveType: "VACCINE", keyword };
+    const preventiveOverdue = q.includes("terlambat");
+    return { mode: "preventive", preventiveType: "VACCINE", keyword, preventiveOverdue };
   }
   if (
+    q.includes("terlambat tetes kutu") ||
+    q.includes("terlambat obat tetes kutu") ||
+    q.includes("belum tetes kutu") ||
+    q.includes("tetes kutu") ||
     q.includes("kutu") ||
     q.includes("flea") ||
     q.includes("obat kutu") ||
     q.includes("belum kutu") ||
     q.includes("perlu obat kutu")
   ) {
-    return { mode: "preventive", preventiveType: "FLEA" };
+    const preventiveOverdue = q.includes("terlambat");
+    return { mode: "preventive", preventiveType: "FLEA", preventiveOverdue };
   }
   if (
+    q.includes("terlambat obat cacing") ||
+    q.includes("belum obat cacing") ||
+    q.includes("obat cacing") ||
     q.includes("cacing") ||
     q.includes("deworm") ||
-    q.includes("obat cacing") ||
     q.includes("belum cacing") ||
     q.includes("perlu obat cacing")
   ) {
-    return { mode: "preventive", preventiveType: "DEWORM" };
+    const preventiveOverdue = q.includes("terlambat");
+    return { mode: "preventive", preventiveType: "DEWORM", preventiveOverdue };
   }
 
   // ---- Sehat: status baik ----
@@ -199,12 +213,17 @@ function filterCatsBySmartSearch(cats: DashboardCatRecord[], query: string): Das
   if (parsed.mode === "preventive" && parsed.preventiveType) {
     const type = parsed.preventiveType;
     const keyword = parsed.keyword?.toLowerCase();
+    const showOverdue = parsed.preventiveOverdue === true;
+    const today = new Date().toISOString().slice(0, 10);
     return cats.filter((c) => {
       const p = c.preventive.find((x) => x.type === type);
       if (!p) return true;
       if (keyword) {
         const hasMatch = p.lastTitle?.toLowerCase().includes(keyword) ?? false;
         return !hasMatch;
+      }
+      if (showOverdue) {
+        return p.nextDueDate == null || p.nextDueDate < today;
       }
       return p.nextDueDate == null;
     });
@@ -585,20 +604,40 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
             Ringkasan prioritas dan status sistem
           </p>
         </div>
-        <form
-          onSubmit={(e) => e.preventDefault()}
-          className="flex items-center gap-2"
-        >
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <Input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Coba: sakit, dirawat, klinik, grooming, vaksin rabies, berat turun, sehat, stok habis…"
-            className="max-w-md"
-            aria-label="Pencarian pintar"
-          />
-        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <form
+            onSubmit={(e) => e.preventDefault()}
+            className="flex items-center gap-2"
+          >
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <Input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari kucing, stok, atau status…"
+              className="max-w-md"
+              aria-label="Pencarian cerdas"
+            />
+          </form>
+          <span className="text-xs text-muted-foreground">Pencarian cerdas</span>
+        </div>
+        {!searchQuery.trim() && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Kata kunci yang bisa dicoba:</p>
+            <div className="flex flex-wrap gap-2">
+              {(initialData.searchKeywords?.length ? initialData.searchKeywords : DASHBOARD_SEARCH_KEYWORDS).map((keyword) => (
+                <button
+                  key={keyword}
+                  type="button"
+                  onClick={() => setSearchQuery(keyword)}
+                  className="rounded-full border border-border/70 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground/90 transition-colors hover:bg-muted hover:border-border"
+                >
+                  {keyword}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {searchQuery.trim() && (
           <div className="space-y-2">
             {isStockResult ? (
@@ -712,6 +751,20 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
                           <p className="text-xs text-muted-foreground">
                             {[cat.breedName, formatAge(cat.dob)].filter(Boolean).join(" · ") || "—"}
                           </p>
+                          {parsedQuery.mode === "weight_gain" &&
+                            cat.weight.previousKg != null &&
+                            cat.weight.currentKg > cat.weight.previousKg && (
+                              <p className="mt-0.5 text-xs font-medium text-emerald-600">
+                                Naik +{(cat.weight.currentKg - cat.weight.previousKg).toFixed(2)} kg
+                              </p>
+                            )}
+                          {parsedQuery.mode === "weight_drop" &&
+                            cat.weight.previousKg != null &&
+                            cat.weight.currentKg < cat.weight.previousKg && (
+                              <p className="mt-0.5 text-xs font-medium text-red-600">
+                                Turun −{(cat.weight.previousKg - cat.weight.currentKg).toFixed(2)} kg
+                              </p>
+                            )}
                         </div>
                           </Link>
                         </li>

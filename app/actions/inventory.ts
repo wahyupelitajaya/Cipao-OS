@@ -12,6 +12,7 @@ import {
   validateMovementReason,
 } from "@/lib/validation";
 import { todayISO } from "@/lib/dates";
+import { appendActivityLog } from "@/app/actions/activity-log";
 
 const SLUG_MAX_LENGTH = 32;
 const DEFAULT_SLUG_FALLBACK = "OTHER";
@@ -55,6 +56,13 @@ export async function adjustInventoryStock(formData: FormData) {
     }
   }
 
+  const { data: itemRow } = await supabase
+    .from("inventory_items")
+    .select("name")
+    .eq("id", itemId)
+    .maybeSingle();
+  const itemName = (itemRow as { name?: string } | null)?.name ?? "Item";
+
   const { error } = await supabase.from("inventory_movements").insert({
     item_id: itemId,
     date: dateFinal,
@@ -66,6 +74,14 @@ export async function adjustInventoryStock(formData: FormData) {
   if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
 
   revalidateInventory();
+  const reasonLabel = reason === "PURCHASE" ? "Pembelian" : reason === "USAGE" ? "Pemakaian" : "Penyesuaian";
+  const deltaStr = delta >= 0 ? `+${delta}` : String(delta);
+  appendActivityLog({
+    action: "update",
+    entity_type: "inventory",
+    entity_id: itemId,
+    summary: `Inventory: ${itemName} ${deltaStr} (${reasonLabel})${note ? ` — ${note}` : ""}`,
+  }).catch(() => {});
 }
 
 export async function createInventoryCategory(formData: FormData) {
@@ -100,6 +116,11 @@ export async function createInventoryCategory(formData: FormData) {
     );
   }
   revalidateInventory();
+  appendActivityLog({
+    action: "create",
+    entity_type: "inventory_category",
+    summary: `Menambah kategori inventory: ${name}`,
+  }).catch(() => {});
 }
 
 export async function deleteInventoryCategory(formData: FormData) {
@@ -118,6 +139,13 @@ export async function deleteInventoryCategory(formData: FormData) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Kategori masih punya item. Pindahkan atau hapus item dulu.");
   }
 
+  const { data: catRow } = await supabase
+    .from("inventory_categories")
+    .select("name")
+    .eq("id", id)
+    .maybeSingle();
+  const catName = (catRow as { name?: string } | null)?.name ?? "Kategori";
+
   const { error } = await supabase
     .from("inventory_categories")
     .delete()
@@ -125,6 +153,12 @@ export async function deleteInventoryCategory(formData: FormData) {
 
   if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
   revalidateInventory();
+  appendActivityLog({
+    action: "delete",
+    entity_type: "inventory_category",
+    entity_id: id,
+    summary: `Menghapus kategori inventory: ${catName}`,
+  }).catch(() => {});
 }
 
 export async function createInventoryItem(formData: FormData) {
@@ -173,6 +207,12 @@ export async function createInventoryItem(formData: FormData) {
     });
   }
   revalidateInventory();
+  appendActivityLog({
+    action: "create",
+    entity_type: "inventory",
+    entity_id: item?.id ?? null,
+    summary: `Menambah item inventory: ${name}${initialFinal !== 0 ? ` (stok awal ${initialFinal})` : ""}`,
+  }).catch(() => {});
 }
 
 export async function deleteInventoryItem(formData: FormData) {
@@ -181,10 +221,23 @@ export async function deleteInventoryItem(formData: FormData) {
   const id = getString(formData, "id", { required: true });
 
   const supabase = await createSupabaseServerClient();
+  const { data: itemRow } = await supabase
+    .from("inventory_items")
+    .select("name")
+    .eq("id", id)
+    .maybeSingle();
+  const itemName = (itemRow as { name?: string } | null)?.name ?? "Item";
+
   const { error } = await supabase.from("inventory_items").delete().eq("id", id);
 
   if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
   revalidateInventory();
+  appendActivityLog({
+    action: "delete",
+    entity_type: "inventory",
+    entity_id: id,
+    summary: `Menghapus item inventory: ${itemName}`,
+  }).catch(() => {});
 }
 
 export type InventoryFormState = { error: string | null };

@@ -133,6 +133,17 @@ export type Database = {
           created_by: string | null;
         };
       };
+      activity_log: {
+        Row: {
+          id: string;
+          created_at: string;
+          user_id: string | null;
+          action: string;
+          entity_type: string | null;
+          entity_id: string | null;
+          summary: string;
+        };
+      };
     };
   };
 };

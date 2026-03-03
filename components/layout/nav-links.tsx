@@ -4,21 +4,27 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const navItems: { href: string; label: string; adminOnly?: boolean }[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/cats", label: "Cats" },
   { href: "/health", label: "Health" },
   { href: "/grooming", label: "Grooming" },
   { href: "/inventory", label: "Inventory" },
-  { href: "/activity", label: "Aktivitas" },
+  { href: "/activity", label: "Activity" },
+  { href: "/log", label: "Log", adminOnly: true },
 ];
 
-export function NavLinks() {
+interface NavLinksProps {
+  admin?: boolean;
+}
+
+export function NavLinks({ admin = false }: NavLinksProps) {
   const pathname = usePathname();
+  const items = navItems.filter((item) => !item.adminOnly || admin);
 
   return (
     <nav className="flex flex-1 flex-col gap-0.5">
-      {navItems.map((item) => {
+      {items.map((item) => {
         const active =
           pathname === item.href ||
           (item.href !== "/dashboard" && pathname.startsWith(item.href));

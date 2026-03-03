@@ -134,6 +134,23 @@ export const PHOTO_ALLOWED_MIME_TYPES = [
   "image/webp",
 ] as const;
 
+// --- Dashboard smart search ---
+/** Keyword suggest pencarian cerdas dashboard (fallback jika tabel kosong). Harus cocok dengan parseSmartSearch. */
+export const DASHBOARD_SEARCH_KEYWORDS = [
+  "sakit",
+  "berat naik",
+  "berat turun",
+  "belum grooming",
+  "terlambat vaksin",
+  "terlambat obat cacing",
+  "terlambat tetes kutu",
+  "stok habis",
+  "stok rendah",
+  "butuh di beli",
+  "sehat",
+  "dirawat",
+] as const;
+
 // --- Business rules ---
 /** Number of days ahead to consider preventive "due soon" */
 export const DUE_SOON_DAYS = 7;

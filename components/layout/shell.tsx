@@ -5,7 +5,7 @@ import { GlobalCommand } from "@/components/ui/command";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { NavLinks } from "@/components/layout/nav-links";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { getSessionProfile } from "@/lib/auth";
+import { getSessionProfile, isAdmin } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
 import { getSearchData } from "@/lib/data/search";
 import type { SearchData } from "@/lib/data/search";
@@ -53,7 +53,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
             <span className="truncate text-sm tracking-tight">Cipao OS</span>
           </Link>
 
-          <NavLinks />
+          <NavLinks admin={isAdmin(profile)} />
 
           <div className="mt-auto pt-5 border-t border-border">
             <p className="mt-2 truncate text-xs text-muted-foreground">
