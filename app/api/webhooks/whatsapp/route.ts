@@ -260,7 +260,11 @@ export async function POST(req: NextRequest) {
               continue;
             }
 
-            // 3) Dirawat: "dirawat - cipao - sedang - sakit kaki" → tambah NOTE "Dalam perawatan" + dirawat_status.
+            // 3) Dirawat:
+            //    Format lengkap (disarankan):
+            //    "dirawat - nama kucing - kondisi(status) - lokasi - menular - keterangan"
+            //    Contoh: "dirawat - boodie - ringan - klinik - tidak menular - kaki sakit"
+            //    Masih mendukung format lama: "dirawat - nama kucing - keterangan".
             const isDirawat = commandLower.startsWith("dirawat");
             if (isDirawat) {
               const parts = commandText
@@ -268,8 +272,15 @@ export async function POST(req: NextRequest) {
                 .map((p) => p.trim())
                 .filter((p) => p.length > 0);
               const namesPart = parts[1] ?? "";
-              const statusPart = (parts[2] ?? "").toLowerCase();
-              const notePart = parts[3] ?? (parts[2] ?? "");
+              const kondisiPart = (parts[2] ?? "").toLowerCase();
+              const lokasiPart = (parts[3] ?? "").toLowerCase();
+              const menularPart = (parts[4] ?? "").toLowerCase();
+              const notePart =
+                parts[5] ??
+                parts[4] ??
+                parts[3] ??
+                parts[2] ??
+                "";
 
               const nameTokens = namesPart
                 .split(/[,\n]/)
@@ -292,8 +303,8 @@ export async function POST(req: NextRequest) {
                 continue;
               }
 
-              // Map teks status bebas → nilai dirawat_status yang valid.
-              const statusTokens = statusPart
+              // Map teks kondisi bebas → nilai dirawat_status yang valid.
+              const statusTokens = kondisiPart
                 ? statusPart
                     .split(/[,\s/]+/)
                     .map((s) => s.trim())
@@ -335,34 +346,66 @@ export async function POST(req: NextRequest) {
                 });
               }
 
-              if (dirawatValues.size > 0) {
-                const allowed = [
-                  "tidak_ada_perubahan",
-                  "ada_perubahan",
-                  "parah",
-                  "sedang",
-                  "ringan",
-                  "mau_makan",
-                  "tidak_mau_makan",
-                  "lemes",
-                  "seger",
-                ];
-                const finalStatuses = Array.from(dirawatValues).filter((v) => allowed.includes(v));
-                if (finalStatuses.length > 0) {
-                  const { error: catErr } = await supabase
-                    .from("cats")
-                    .update({ dirawat_status: finalStatuses })
-                    .in("id", Array.from(catIds));
-                  if (catErr) {
-                    console.error("[WhatsApp webhook] update cats.dirawat_status error:", catErr.message);
-                  } else {
-                    await supabase.from("activity_log").insert({
-                      user_id: null,
-                      action: "update",
-                      entity_type: "cat",
-                      summary: `Update dirawat_status (${finalStatuses.join(", ")}) untuk ${catIds.size} kucing via WhatsApp`,
-                    });
-                  }
+              // Siapkan update ke kolom cats: dirawat_status + status + location + is_contagious + treatment_notes.
+              const allowedDirawat = [
+                "tidak_ada_perubahan",
+                "ada_perubahan",
+                "parah",
+                "sedang",
+                "ringan",
+                "mau_makan",
+                "tidak_mau_makan",
+                "lemes",
+                "seger",
+              ];
+              const finalDirawatStatuses =
+                dirawatValues.size > 0
+                  ? Array.from(dirawatValues).filter((v) => allowedDirawat.includes(v))
+                  : [];
+
+              // Kondisi → status umum kucing (jika cocok enum utama).
+              let catStatus: string | null = null;
+              if (kondisiPart === "sehat") catStatus = "sehat";
+              else if (kondisiPart === "membaik") catStatus = "membaik";
+              else if (kondisiPart === "memburuk") catStatus = "memburuk";
+              else if (kondisiPart === "hampir sembuh" || kondisiPart === "hampir_sembuh") catStatus = "hampir_sembuh";
+              else if (kondisiPart === "observasi") catStatus = "observasi";
+              else if (kondisiPart === "sakit") catStatus = "sakit";
+
+              // Lokasi.
+              let catLocation: string | null = null;
+              if (lokasiPart === "rumah") catLocation = "rumah";
+              else if (lokasiPart === "toko") catLocation = "toko";
+              else if (lokasiPart === "klinik") catLocation = "klinik";
+
+              // Menular.
+              let isContagious: boolean | null = null;
+              if (menularPart === "menular" || menularPart === "ya") isContagious = true;
+              else if (menularPart === "tidak menular" || menularPart === "tidak" || menularPart === "nggak" || menularPart === "ga") {
+                isContagious = false;
+              }
+
+              const catUpdate: Record<string, unknown> = {};
+              if (finalDirawatStatuses.length > 0) catUpdate.dirawat_status = finalDirawatStatuses;
+              if (catStatus) catUpdate.status = catStatus;
+              if (catLocation) catUpdate.location = catLocation;
+              if (isContagious !== null) catUpdate.is_contagious = isContagious;
+              if (notePart && notePart.trim()) catUpdate.treatment_notes = notePart.trim();
+
+              if (Object.keys(catUpdate).length > 0) {
+                const { error: catErr } = await supabase
+                  .from("cats")
+                  .update(catUpdate)
+                  .in("id", Array.from(catIds));
+                if (catErr) {
+                  console.error("[WhatsApp webhook] update cats (dirawat) error:", catErr.message);
+                } else {
+                  await supabase.from("activity_log").insert({
+                    user_id: null,
+                    action: "update",
+                    entity_type: "cat",
+                    summary: `Update Dirawat via WhatsApp untuk ${catIds.size} kucing (status/kondisi/lokasi/menular/keterangan)`,
+                  });
                 }
               }
 
