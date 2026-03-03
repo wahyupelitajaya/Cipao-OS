@@ -76,8 +76,7 @@ export async function POST(req: NextRequest) {
             const { createSupabaseAdminClient } = await import("@/lib/supabaseAdmin");
             const supabase = createSupabaseAdminClient();
 
-            // Jika pesan hanya berisi "Libur" (contoh: "Jumat, 6 Maret 2026\nLibur"),
-            // tandai hari tersebut sebagai "tidak dikunjungi" dengan alasan Libur.
+            // 1) Pesan "Libur" → tandai visit_days sebagai tidak dikunjungi dengan alasan Libur.
             if (normalizedNote === "libur") {
               const { error: visitError } = await supabase
                 .from("visit_days")
@@ -107,6 +106,64 @@ export async function POST(req: NextRequest) {
               continue;
             }
 
+            // 2) Pesan diawali kata "grooming" → cari nama kucing dan buat grooming_logs, tanpa membuat activity.
+            const lower = normalizedNote;
+            const isGroomingCommand = lower.startsWith("grooming ");
+            if (isGroomingCommand) {
+              // Ambil teks setelah kata "grooming"
+              const namesRaw = lower.replace(/^grooming\s+/, "");
+              // Pisah dengan koma atau spasi, buang kosong
+              const nameTokens = namesRaw
+                .split(/[,\n]/)
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0);
+
+              if (nameTokens.length > 0) {
+                const { data: cats, error: catsError } = await supabase
+                  .from("cats")
+                  .select("id, name")
+                  .eq("is_active", true);
+
+                if (catsError) {
+                  console.error("[WhatsApp webhook] fetch cats error:", catsError.message);
+                } else {
+                  const matchedIds = new Set<string>();
+                  const catList = (cats ?? []) as { id: string; name: string }[];
+                  const normalizedCats = catList.map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    nameLower: c.name.trim().toLowerCase(),
+                  }));
+
+                  for (const token of nameTokens) {
+                    const tokenLower = token.toLowerCase();
+                    // Cari nama kucing yang mengandung token (case-insensitive)
+                    const match = normalizedCats.find((c) => c.nameLower.includes(tokenLower));
+                    if (match) {
+                      matchedIds.add(match.id);
+                    }
+                  }
+
+                  if (matchedIds.size > 0) {
+                    const inserts = Array.from(matchedIds).map((catId) => ({
+                      cat_id: catId,
+                      date: activityDate,
+                    }));
+                    const { error: groomError } = await supabase.from("grooming_logs").insert(inserts);
+                    if (groomError) {
+                      console.error("[WhatsApp webhook] grooming_logs insert error:", groomError.message);
+                    } else {
+                      saved++;
+                    }
+                  }
+                }
+              }
+
+              // Tidak membuat daily_activities untuk perintah grooming.
+              continue;
+            }
+
+            // 3) Default: pesan biasa → simpan ke daily_activities seperti sebelumnya.
             const row = {
               date: activityDate,
               time_slots: [parsed.timeSlot],
