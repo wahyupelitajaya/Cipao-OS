@@ -68,11 +68,45 @@ export async function POST(req: NextRequest) {
 
           const parsed = parseWhatsAppActivityMessage(text);
           const activityDate = parsed.date ?? defaultToday;
-          const note = `[WhatsApp] ${from}: ${parsed.note || text}`;
+          const rawNote = parsed.note || text;
+          const note = `[WhatsApp] ${from}: ${rawNote}`;
+          const normalizedNote = String(rawNote).trim().toLowerCase();
 
           try {
             const { createSupabaseAdminClient } = await import("@/lib/supabaseAdmin");
             const supabase = createSupabaseAdminClient();
+
+            // Jika pesan hanya berisi "Libur" (contoh: "Jumat, 6 Maret 2026\nLibur"),
+            // tandai hari tersebut sebagai "tidak dikunjungi" dengan alasan Libur.
+            if (normalizedNote === "libur") {
+              const { error: visitError } = await supabase
+                .from("visit_days")
+                .upsert(
+                  {
+                    date: activityDate,
+                    visited: false,
+                    note: "Libur",
+                    created_by: null,
+                  },
+                  { onConflict: "date" },
+                );
+
+              if (!visitError) {
+                saved++;
+                await supabase.from("activity_log").insert({
+                  user_id: null,
+                  action: "update",
+                  entity_type: "visit_day",
+                  entity_id: activityDate,
+                  summary: `Status kunjungan ${activityDate}: Tidak dikunjungi (Libur via WhatsApp)`,
+                });
+              } else {
+                console.error("[WhatsApp webhook] visit_days upsert error:", visitError.message);
+              }
+
+              continue;
+            }
+
             const row = {
               date: activityDate,
               time_slots: [parsed.timeSlot],
