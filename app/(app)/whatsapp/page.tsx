@@ -26,7 +26,7 @@ export default async function WhatsAppPage() {
           Koneksi WhatsApp
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pesan masuk disimpan dulu di kotak masuk di bawah. Klik &quot;Proses ke Activity&quot; agar sistem membaca teks (tanggal, waktu, lokasi) lalu memindahkan ke halaman Activity.
+          Pesan dari WA diproses langsung: sistem membaca tanggal, waktu, dan lokasi dari teks lalu menyimpan ke halaman Activity.
         </p>
       </header>
 
