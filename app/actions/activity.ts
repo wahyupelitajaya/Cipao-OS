@@ -8,7 +8,7 @@ import { requireDate, getOptionalString, getJsonStringArray } from "@/lib/valida
 import { isValidDateString } from "@/lib/dates";
 import { ACTIVITY_CATEGORIES, BULK_MAX_IDS } from "@/lib/constants";
 
-export type DayStatus = "visited" | "partial" | "none";
+export type DayStatus = "visited" | "partial" | "none" | "not_visited";
 
 export interface MonthDaySummary {
   date: string; // YYYY-MM-DD
@@ -30,6 +30,8 @@ export interface DayActivityItem {
 export interface VisitDayState {
   date: string;
   visited: boolean | null; // null = no row
+  /** Alasan ketika tidak dikunjungi (visit_days.note). */
+  not_visited_reason?: string | null;
 }
 
 const TIME_SLOTS = ["Pagi", "Siang", "Sore", "Malam"] as const;
@@ -118,8 +120,8 @@ export async function getMonthActivitySummary(
     const visited = visitByDate.get(date);
     const hasActivities = datesWithActivities.has(date);
     let status: DayStatus = "none";
-    if (visited === true) status = "visited";
-    else if (hasActivities) status = "partial";
+    if (visited === false) status = "not_visited";
+    else if (hasActivities || visited === true) status = "visited";
     result.push({ date, status });
   }
   return result;
@@ -137,7 +139,7 @@ export async function getDayActivities(
 
   const supabase = await createSupabaseServerClient();
   const [visitRes, activityRes] = await Promise.all([
-    supabase.from("visit_days").select("date, visited").eq("date", date).maybeSingle(),
+    supabase.from("visit_days").select("date, visited, note").eq("date", date).maybeSingle(),
     supabase
       .from("daily_activities")
       .select("id, date, time_slots, locations, categories, cat_ids, activity_type, note, created_at")
@@ -147,11 +149,15 @@ export async function getDayActivities(
 
   if (activityRes.error) throw new AppError(ErrorCode.DB_ERROR, activityRes.error.message, activityRes.error);
 
-  const visitRow = visitRes.data;
+  const visitRow = visitRes.data as { date: string; visited: boolean; note?: string | null } | null;
   const activityRows = activityRes.data ?? null;
 
   const visit: VisitDayState | null = visitRow
-    ? { date: (visitRow as { date: string; visited: boolean }).date, visited: (visitRow as { date: string; visited: boolean }).visited }
+    ? {
+        date: visitRow.date,
+        visited: visitRow.visited,
+        not_visited_reason: visitRow.visited === false ? (visitRow.note ?? null) : null,
+      }
     : { date, visited: null };
 
   type Row = {
@@ -193,8 +199,84 @@ export async function getDayActivities(
   return { activities, visit };
 }
 
-/** Set visit status for a date. Admin only. */
-export async function setVisitStatus(date: string, visited: boolean): Promise<void> {
+/** Get all activities for a month (for print). */
+export async function getMonthActivities(
+  year: number,
+  month: number,
+): Promise<DayActivityItem[]> {
+  await requireUser();
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12 ||
+    year < 2000 ||
+    year > 2100
+  ) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Bulan atau tahun tidak valid.");
+  }
+
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const end = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: activityRows, error } = await supabase
+    .from("daily_activities")
+    .select("id, date, time_slots, locations, categories, cat_ids, activity_type, note, created_at")
+    .gte("date", start)
+    .lte("date", end)
+    .order("date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+
+  type Row = {
+    id: string;
+    date: string;
+    time_slots: string[] | null;
+    locations: string[] | null;
+    categories: string[] | null;
+    cat_ids: string[] | null;
+    activity_type: string;
+    note: string | null;
+    created_at: string;
+  };
+  const rows = (activityRows ?? []) as Row[];
+  const allCatIds = [...new Set(rows.flatMap((r) => r.cat_ids ?? []))];
+  const catNameMap = new Map<string, string>();
+  if (allCatIds.length > 0) {
+    const { data: catRows } = await supabase
+      .from("cats")
+      .select("id, name")
+      .in("id", allCatIds);
+    (catRows ?? []).forEach((c: { id: string; name: string }) => catNameMap.set(c.id, c.name));
+  }
+  const skipDisplay = (s: string) => !s || s === "Other" || s === "—" || s.trim() === "";
+  const cleanJoin = (arr: string[] | null | undefined) =>
+    (arr ?? []).filter((x: string) => !skipDisplay(x)).map((x: string) => x.trim()).join(", ");
+  const activities: DayActivityItem[] = rows.map((r) => ({
+    id: r.id,
+    date: r.date,
+    time_slots: cleanJoin(r.time_slots),
+    locations: cleanJoin(r.locations),
+    categories: cleanJoin(r.categories),
+    cat_names: (r.cat_ids ?? []).map((id) => catNameMap.get(id) ?? id).filter(Boolean).join(", ") || "",
+    activity_type: ACTIVITY_TYPE_DISPLAY[r.activity_type as keyof typeof ACTIVITY_TYPE_DISPLAY] ?? r.activity_type ?? "Lainnya",
+    note: r.note,
+    created_at: r.created_at,
+  }));
+
+  return activities;
+}
+
+/** Set visit status for a date. Admin only. reason dipakai ketika visited = false (alasan tidak dikunjungi). */
+export async function setVisitStatus(
+  date: string,
+  visited: boolean,
+  reason?: string | null,
+): Promise<void> {
   const profile = await requireAdmin();
 
   if (typeof date !== "string" || !isValidDateString(date)) {
@@ -205,14 +287,30 @@ export async function setVisitStatus(date: string, visited: boolean): Promise<vo
   }
 
   const supabase = await createSupabaseServerClient();
+  const note = visited === false ? (reason?.trim() || null) : null;
   const { error } = await supabase.from("visit_days").upsert(
     {
       date,
       visited,
+      note,
       created_by: profile.id,
     },
     { onConflict: "date" },
   );
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  revalidateActivity();
+}
+
+/** Hapus status kunjungan untuk suatu tanggal (jadikan "belum dikunjungi"). Admin only. */
+export async function clearVisitStatus(date: string): Promise<void> {
+  await requireAdmin();
+
+  if (typeof date !== "string" || !isValidDateString(date)) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Format tanggal tidak valid.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("visit_days").delete().eq("date", date);
   if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
   revalidateActivity();
 }

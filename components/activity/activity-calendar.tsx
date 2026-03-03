@@ -68,7 +68,8 @@ export function ActivityCalendar({
         {days.map(({ date, status }) => {
           const dayNum = date.slice(-2);
           const isSelected = selectedDate === date;
-          const hasActivity = status === "visited" || status === "partial";
+          const isVisited = status === "visited";
+          const isNotVisited = status === "not_visited";
           return (
             <button
               key={date}
@@ -77,21 +78,24 @@ export function ActivityCalendar({
               className={cn(
                 "flex flex-col items-center gap-0.5 rounded py-1.5 transition-colors",
                 "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
-                hasActivity && "bg-[hsl(var(--status-bg-ok))]",
+                isVisited && "bg-[hsl(var(--status-bg-ok))]",
+                isNotVisited && "bg-red-50 dark:bg-red-950/30",
                 isSelected && "bg-muted font-medium text-foreground ring-1 ring-border",
               )}
             >
               <span className={cn("text-foreground", isSelected && "font-semibold")}>
                 {parseInt(dayNum, 10)}
               </span>
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 shrink-0 rounded-full",
-                  hasActivity && "bg-[hsl(var(--status-ok))]",
-                  status === "none" && "bg-muted-foreground/40",
-                )}
-                aria-hidden
-              />
+              {(isVisited || isNotVisited) && (
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    isVisited && "bg-[hsl(var(--status-ok))]",
+                    isNotVisited && "bg-red-500",
+                  )}
+                  aria-hidden
+                />
+              )}
             </button>
           );
         })}

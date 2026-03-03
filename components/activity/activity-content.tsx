@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTransition } from "react";
 import { Printer } from "lucide-react";
-import { getMonthActivitySummary, getDayActivities } from "@/app/actions/activity";
+import { getMonthActivitySummary, getDayActivities, getMonthActivities } from "@/app/actions/activity";
 import { getFriendlyMessage } from "@/lib/errors";
 import type {
   MonthDaySummary,
@@ -43,6 +43,8 @@ export function ActivityContent({
   const [visit, setVisit] = useState<VisitDayState | null>(initialVisit);
   const [isPending, startTransition] = useTransition();
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [monthActivitiesForPrint, setMonthActivitiesForPrint] = useState<DayActivityItem[] | null>(null);
+  const printRequestedRef = useRef(false);
 
   useEffect(() => {
     setYear(initialYear);
@@ -120,10 +122,41 @@ export function ActivityContent({
     return d.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   }
 
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  const lastDayOfMonth = new Date(year, month, 0).getDate();
+  const datesInMonth = Array.from({ length: lastDayOfMonth }, (_, i) => {
+    const d = i + 1;
+    return `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  });
+  const activitiesByDate = (monthActivitiesForPrint ?? []).reduce<Record<string, DayActivityItem[]>>((acc, a) => {
+    if (!acc[a.date]) acc[a.date] = [];
+    acc[a.date].push(a);
+    return acc;
+  }, {});
+
+  const handlePrint = useCallback(async () => {
+    setLoadError(null);
+    printRequestedRef.current = true;
+    try {
+      const list = await getMonthActivities(year, month);
+      setMonthActivitiesForPrint(list);
+    } catch (err) {
+      printRequestedRef.current = false;
+      setLoadError(getFriendlyMessage(err));
+    }
+  }, [year, month]);
+
+  useEffect(() => {
+    if (monthActivitiesForPrint !== null && printRequestedRef.current) {
+      printRequestedRef.current = false;
+      window.print();
+    }
+  }, [monthActivitiesForPrint]);
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
       <div className="no-print col-span-full flex flex-wrap items-center gap-3">
-        <Button type="button" variant="outline" size="sm" onClick={() => window.print()} className="gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="gap-2" disabled={isPending}>
           <Printer className="h-4 w-4 shrink-0" aria-hidden />
           Cetak
         </Button>
@@ -168,41 +201,46 @@ export function ActivityContent({
         aria-hidden
       >
         <div className="activity-print-inner">
-          <h1 className="activity-print-title">Laporan Aktivitas</h1>
-          <p className="activity-print-date-label">
-            Tanggal: {formatPrintDate(selectedDate)}
-          </p>
+          <h1 className="activity-print-title">Laporan Aktivitas — {monthLabel}</h1>
           <p className="activity-print-meta">
             Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
-          {activities.length === 0 ? (
-            <p className="activity-print-empty">Belum ada aktivitas.</p>
-          ) : (
-            <ul className="activity-print-list">
-              {activities.map((a, i) => {
-                const firstTime = (a.time_slots ?? "").split(",")[0]?.trim() ?? "";
-                const timeClass =
-                  firstTime === "Pagi"
-                    ? "activity-print-item--pagi"
-                    : firstTime === "Siang"
-                      ? "activity-print-item--siang"
-                      : firstTime === "Sore"
-                        ? "activity-print-item--sore"
-                        : firstTime === "Malam"
-                          ? "activity-print-item--malam"
-                          : "";
-                return (
-                  <li key={a.id} className={`activity-print-item ${timeClass}`}>
-                    <span className="activity-print-item-num">{i + 1}.</span>
-                    <span className="activity-print-item-meta">
-                      {[a.time_slots, a.locations, a.categories].filter(Boolean).join(" · ")}
-                    </span>
-                    {a.note && <span className="activity-print-item-note">{a.note}</span>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          {datesInMonth.map((date) => {
+            const dayActivities = activitiesByDate[date] ?? [];
+            return (
+              <section key={date} className="activity-print-day-section">
+                <h2 className="activity-print-day-title">{formatPrintDate(date)}</h2>
+                {dayActivities.length === 0 ? (
+                  <p className="activity-print-empty">Tidak ada aktivitas.</p>
+                ) : (
+                  <ul className="activity-print-list">
+                    {dayActivities.map((a, i) => {
+                      const firstTime = (a.time_slots ?? "").split(",")[0]?.trim() ?? "";
+                      const timeClass =
+                        firstTime === "Pagi"
+                          ? "activity-print-item--pagi"
+                          : firstTime === "Siang"
+                            ? "activity-print-item--siang"
+                            : firstTime === "Sore"
+                              ? "activity-print-item--sore"
+                              : firstTime === "Malam"
+                                ? "activity-print-item--malam"
+                                : "";
+                      return (
+                        <li key={a.id} className={`activity-print-item ${timeClass}`}>
+                          <span className="activity-print-item-num">{i + 1}.</span>
+                          <span className="activity-print-item-meta">
+                            {[a.time_slots, a.locations, a.categories].filter(Boolean).join(" · ")}
+                          </span>
+                          {a.note && <span className="activity-print-item-note">{a.note}</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
         </div>
       </div>
     </div>

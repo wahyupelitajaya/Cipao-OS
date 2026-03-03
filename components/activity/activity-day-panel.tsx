@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { setVisitStatus, deleteActivity, deleteActivities } from "@/app/actions/activity";
+import { setVisitStatus, clearVisitStatus, deleteActivity, deleteActivities } from "@/app/actions/activity";
 import { getFriendlyMessage } from "@/lib/errors";
 import { AddActivityDialog } from "@/components/activity/add-activity-dialog";
 import type { DayActivityItem, VisitDayState } from "@/app/actions/activity";
@@ -66,13 +66,38 @@ export function ActivityDayPanel({
   const [bulkResult, setBulkResult] = useState<{ successCount: number; failed: { id: string; reason: string }[] } | null>(null);
   const [confirmSingleId, setConfirmSingleId] = useState<string | null>(null);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+  const [showNotVisitedForm, setShowNotVisitedForm] = useState(false);
+  const [notVisitedReason, setNotVisitedReason] = useState("");
 
-  async function handleSetVisited(visited: boolean) {
+  async function handleSetVisited(visited: boolean, reason?: string | null) {
     if (!date) return;
     setError(null);
     startTransition(async () => {
       try {
-        await setVisitStatus(date, visited);
+        await setVisitStatus(date, visited, reason);
+        setShowNotVisitedForm(false);
+        setNotVisitedReason("");
+        onVisitChange?.();
+        router.refresh();
+      } catch (err) {
+        setError(getFriendlyMessage(err));
+      }
+    });
+  }
+
+  function handleClickNotVisited() {
+    setShowNotVisitedForm(true);
+    setNotVisitedReason(visit?.not_visited_reason ?? "");
+  }
+
+  async function handleClearVisitStatus() {
+    if (!date) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await clearVisitStatus(date);
+        setShowNotVisitedForm(false);
+        setNotVisitedReason("");
         onVisitChange?.();
         router.refresh();
       } catch (err) {
@@ -147,7 +172,11 @@ export function ActivityDayPanel({
     );
   }
 
-  const isVisited = visit?.visited === true;
+  /** Dikunjungi jika explicitly true atau ada aktivitas di hari ini. */
+  const isVisited = visit?.visited === true || activities.length > 0;
+  const isNotVisited = visit?.visited === false;
+  /** Belum dikunjungi = belum ada status (no row) dan belum ada aktivitas. */
+  const isNotYetVisited = visit?.visited === null && activities.length === 0;
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border bg-background-elevated p-6 shadow-soft">
@@ -174,24 +203,97 @@ export function ActivityDayPanel({
           {formatDateLabel(date)}
         </h2>
         {admin && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Status kunjungan:</span>
-            <Button
-              variant={isVisited ? "default" : "outline"}
-              size="sm"
-              disabled={isPending}
-              onClick={() => handleSetVisited(true)}
-            >
-              Dikunjungi
-            </Button>
-            <Button
-              variant={!isVisited ? "default" : "outline"}
-              size="sm"
-              disabled={isPending}
-              onClick={() => handleSetVisited(false)}
-            >
-              Tidak dikunjungi
-            </Button>
+          <div className="mt-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Status kunjungan:</span>
+              <Button
+                variant={isVisited ? "default" : "outline"}
+                size="sm"
+                disabled={isPending}
+                onClick={() => handleSetVisited(true)}
+              >
+                Dikunjungi
+              </Button>
+              <Button
+                variant={isNotVisited ? "default" : "outline"}
+                size="sm"
+                disabled={isPending}
+                onClick={showNotVisitedForm ? undefined : handleClickNotVisited}
+                className={isNotVisited ? "border-red-300 bg-red-50 text-red-800 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-200 dark:hover:bg-red-900/50" : ""}
+              >
+                Tidak dikunjungi
+              </Button>
+              <Button
+                variant={isNotYetVisited ? "default" : "outline"}
+                size="sm"
+                disabled={isPending}
+                onClick={handleClearVisitStatus}
+                className={isNotYetVisited ? "border-slate-300 bg-slate-100 text-slate-800 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700" : ""}
+              >
+                Belum dikunjungi
+              </Button>
+            </div>
+            {(showNotVisitedForm || isNotVisited) && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Alasan tidak dikunjungi {isNotVisited && !showNotVisitedForm ? "(opsional)" : ""}
+                </label>
+                {showNotVisitedForm ? (
+                  <>
+                    <textarea
+                      value={notVisitedReason}
+                      onChange={(e) => setNotVisitedReason(e.target.value)}
+                      placeholder="Contoh: Libur, lokasi tutup, …"
+                      rows={2}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => handleSetVisited(false, notVisitedReason)}
+                      >
+                        {isPending ? "Menyimpan…" : "Simpan"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => {
+                          setShowNotVisitedForm(false);
+                          setNotVisitedReason("");
+                        }}
+                      >
+                        Batal
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm text-foreground flex-1 min-w-0">{visit?.not_visited_reason || "—"}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => {
+                        setShowNotVisitedForm(true);
+                        setNotVisitedReason(visit?.not_visited_reason ?? "");
+                      }}
+                    >
+                      Ubah alasan
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {!admin && isNotVisited && (
+          <div className="mt-2 rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Alasan tidak dikunjungi</p>
+            <p className="text-sm text-foreground">{visit?.not_visited_reason || "—"}</p>
           </div>
         )}
       </div>
