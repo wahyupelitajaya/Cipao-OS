@@ -9,7 +9,7 @@ import { setVisitStatus, clearVisitStatus, deleteActivity, deleteActivities } fr
 import { getFriendlyMessage } from "@/lib/errors";
 import { AddActivityDialog } from "@/components/activity/add-activity-dialog";
 import type { DayActivityItem, VisitDayState } from "@/app/actions/activity";
-import { cn } from "@/lib/utils";
+import { cn, formatActivityNoteForDisplay } from "@/lib/utils";
 
 interface ActivityDayPanelProps {
   date: string | null;
@@ -408,7 +408,7 @@ export function ActivityDayPanel({
                     );
                   })()}
                   {a.note && (
-                    <span className="block w-full whitespace-pre-wrap text-muted-foreground">{a.note}</span>
+                    <span className="block w-full whitespace-pre-wrap text-muted-foreground">{formatActivityNoteForDisplay(a.note)}</span>
                   )}
                 </li>
               ))}

@@ -144,6 +144,26 @@ export type Database = {
           summary: string;
         };
       };
+      webhook_whatsapp_debug: {
+        Row: {
+          id: string;
+          received_at: string;
+          raw_preview: string;
+          parsed_date: string | null;
+          parsed_time_slot: string | null;
+          parsed_location: string | null;
+        };
+      };
+      whatsapp_inbox: {
+        Row: {
+          id: string;
+          received_at: string;
+          from_number: string;
+          raw_body: string;
+          processed_at: string | null;
+          created_at: string;
+        };
+      };
     };
   };
 };

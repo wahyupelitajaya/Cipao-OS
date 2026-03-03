@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 
 /**
  * GET: Verifikasi webhook Meta.
@@ -16,7 +15,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Bad mode" }, { status: 400 });
   }
 
-  // Baca env di dalam request (penting di Vercel serverless)
   const expectedToken = (process.env.WHATSAPP_VERIFY_TOKEN ?? "").trim();
   const receivedToken = (tokenFromMeta ?? "").trim();
 
@@ -39,27 +37,10 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** Tanggal hari ini dalam WITA (UTC+8) supaya cocok dengan halaman Aktivitas. */
-function todayWITA(): string {
-  const now = new Date();
-  const wita = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const y = wita.getUTCFullYear();
-  const m = String(wita.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(wita.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/** Time slot dari jam sekarang (perkiraan WITA). */
-function getTimeSlot(): string {
-  const h = (new Date().getUTCHours() + 8 + 24) % 24;
-  if (h >= 5 && h < 11) return "Pagi";
-  if (h >= 11 && h < 15) return "Siang";
-  if (h >= 15 && h < 18) return "Sore";
-  return "Malam";
-}
-
 /**
- * POST: Pesan masuk dari WhatsApp Cloud API → simpan ke daily_activities.
+ * POST: Pesan masuk dari WhatsApp Cloud API.
+ * HANYA simpan ke whatsapp_inbox (kotak masuk). TIDAK menulis ke daily_activities.
+ * Activity hanya diisi saat admin klik "Proses ke Activity" di halaman Koneksi WhatsApp.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -68,48 +49,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    const today = todayWITA();
-    const timeSlot = getTimeSlot();
-    let saved = 0;
-
     for (const entry of body.entry) {
       const changes = entry.changes;
       if (!Array.isArray(changes)) continue;
       for (const change of changes) {
-        if (change?.field !== "messages" || !change?.value?.messages) continue;
-        for (const msg of change.value.messages) {
-          if (msg.type !== "text" || !msg.text?.body) continue;
-          const text = String(msg.text.body).trim();
+        if (change?.field !== "messages") continue;
+        const value = change?.value;
+        const messages = Array.isArray(value?.messages) ? value.messages : value?.message ? [value.message] : [];
+        for (const msg of messages) {
+          const textRaw = typeof msg?.text === "string" ? msg.text : msg?.text?.body;
+          if (msg.type !== "text" || textRaw == null) continue;
+          const text = String(textRaw).trim();
           if (!text) continue;
           const from = msg.from ?? "unknown";
-          const note = `[WhatsApp] ${from}: ${text}`;
 
           try {
             const { createSupabaseAdminClient } = await import("@/lib/supabaseAdmin");
             const supabase = createSupabaseAdminClient();
-            const row = {
-              date: today,
-              time_slots: [timeSlot],
-              locations: ["Rumah"],
-              categories: [],
-              cat_ids: [],
-              note,
-              created_by: null,
-            };
-            let err = (await supabase.from("daily_activities").insert({ ...row, activity_type: "Lainnya" })).error;
-            if (err?.code === "23514" && err?.message?.includes("activity_type_check")) {
-              err = (await supabase.from("daily_activities").insert({ ...row, activity_type: "Other" })).error;
+            // Hanya inbox — tidak ada insert ke daily_activities di webhook ini.
+            console.log("[WhatsApp webhook] Menyimpan ke kotak masuk (whatsapp_inbox) saja, tidak ke Activity.");
+            const { error } = await supabase.from("whatsapp_inbox").insert({
+              from_number: from,
+              raw_body: text,
+            });
+            if (error) {
+              console.error("[WhatsApp webhook] whatsapp_inbox insert failed:", error.message, "Code:", error.code);
             }
-            if (!err) saved++;
-            else console.error("[WhatsApp webhook] insert error:", err.message);
           } catch (e) {
-            console.error("[WhatsApp webhook] insert error:", e);
+            console.error("[WhatsApp webhook] inbox error:", e);
           }
         }
       }
     }
 
-    if (saved > 0) revalidatePath("/activity");
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: true }, { status: 200 });

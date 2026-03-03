@@ -13,6 +13,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { ActivityCalendar } from "@/components/activity/activity-calendar";
 import { ActivityDayPanel } from "@/components/activity/activity-day-panel";
+import { formatActivityNoteForDisplay } from "@/lib/utils";
 
 interface ActivityContentProps {
   initialMonthSummary: MonthDaySummary[];
@@ -232,7 +233,7 @@ export function ActivityContent({
                           <span className="activity-print-item-meta">
                             {[a.time_slots, a.locations, a.categories].filter(Boolean).join(" · ")}
                           </span>
-                          {a.note && <span className="activity-print-item-note">{a.note}</span>}
+                          {a.note && <span className="activity-print-item-note">{formatActivityNoteForDisplay(a.note)}</span>}
                         </li>
                       );
                     })}
