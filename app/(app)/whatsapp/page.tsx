@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import { getSessionProfile, isAdmin } from "@/lib/auth";
-import { getLastWebhookWhatsAppDebug } from "@/app/actions/whatsapp-test";
-import { getWhatsAppInboxUnprocessed } from "@/app/actions/whatsapp-inbox";
 import { WhatsAppSetup } from "@/components/whatsapp/whatsapp-setup";
 
 export default async function WhatsAppPage() {
@@ -16,8 +14,9 @@ export default async function WhatsAppPage() {
   const callbackUrl = baseUrl ? `${baseUrl}/api/webhooks/whatsapp` : null;
   const hasVerifyToken = !!(process.env.WHATSAPP_VERIFY_TOKEN ?? "").trim();
   const hasServiceRoleKey = !!(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
-  const lastWebhookDebug = await getLastWebhookWhatsAppDebug();
-  const inboxUnprocessed = await getWhatsAppInboxUnprocessed();
+  const hasSendConfig =
+    !!(process.env.WHATSAPP_ACCESS_TOKEN ?? "").trim() &&
+    !!(process.env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim();
 
   return (
     <div className="space-y-6">
@@ -26,7 +25,7 @@ export default async function WhatsAppPage() {
           Koneksi WhatsApp
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pesan dari WA diproses langsung: sistem membaca tanggal, waktu, dan lokasi dari teks lalu menyimpan ke halaman Activity.
+          Sambungkan nomor WhatsApp Business; pesan masuk diproses otomatis (tanggal, waktu, lokasi dari teks) dan tersimpan di Activity.
         </p>
       </header>
 
@@ -34,8 +33,7 @@ export default async function WhatsAppPage() {
         callbackUrl={callbackUrl}
         hasVerifyToken={hasVerifyToken}
         hasServiceRoleKey={hasServiceRoleKey}
-        lastWebhookDebug={lastWebhookDebug}
-        inboxUnprocessed={inboxUnprocessed}
+        hasSendConfig={hasSendConfig}
       />
     </div>
   );

@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Check, Copy, AlertCircle, MessageCircle, Play, Inbox, Loader2 } from "lucide-react";
+import { Check, Copy, AlertCircle, MessageCircle, Play, Settings2, BookOpen, FlaskConical, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { testWhatsAppMessageInsert } from "@/app/actions/whatsapp-test";
-import { processWhatsAppInbox, type InboxRow } from "@/app/actions/whatsapp-inbox";
+import { sendWhatsAppMessage } from "@/app/actions/whatsapp-send";
 
 const CONTOH_PESAN = `Selasa, 3 Maret 2026
 
@@ -14,36 +14,31 @@ Pagi Toko :
 - Bersih - bersih
 - Kasi Makan`;
 
-interface LastWebhookDebug {
-  raw_preview: string;
-  parsed_date: string | null;
-  parsed_time_slot: string | null;
-  parsed_location: string | null;
-  received_at: string;
-}
-
 interface WhatsAppSetupProps {
   callbackUrl: string | null;
   hasVerifyToken: boolean;
   hasServiceRoleKey: boolean;
-  lastWebhookDebug: LastWebhookDebug | null;
-  inboxUnprocessed: InboxRow[];
+  hasSendConfig: boolean;
 }
 
 export function WhatsAppSetup({
   callbackUrl,
   hasVerifyToken,
   hasServiceRoleKey,
-  lastWebhookDebug,
-  inboxUnprocessed,
+  hasSendConfig,
 }: WhatsAppSetupProps) {
-  const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const [sendTo, setSendTo] = useState("");
+  const [sendBody, setSendBody] = useState("");
+  const [sendResult, setSendResult] = useState<{ ok: boolean; error?: string } | null>(null);
+  const [sendPending, startSendTransition] = useTransition();
   const [testMessage, setTestMessage] = useState(CONTOH_PESAN);
-  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; parsed?: { date: string; timeSlot: string; location: string; note: string } } | null>(null);
-  const [processResult, setProcessResult] = useState<{ processed: number; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    error?: string;
+    parsed?: { date: string; timeSlot: string; location: string; note: string };
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [isProcessing, startProcessing] = useTransition();
 
   const handleCopyCallback = () => {
     if (!callbackUrl) return;
@@ -55,187 +50,227 @@ export function WhatsAppSetup({
 
   const allEnvSet = hasVerifyToken && hasServiceRoleKey;
 
-  const handleProcessInbox = () => {
-    setProcessResult(null);
-    startProcessing(async () => {
-      const res = await processWhatsAppInbox();
-      setProcessResult(res.ok ? { processed: res.processed } : { processed: 0, error: res.error });
-      if (res.ok) router.refresh();
-    });
-  };
-
   return (
-    <div className="space-y-6 rounded-xl border border-border/60 bg-muted/20 p-6">
-      <section>
+    <div className="space-y-8">
+      {/* 1. Setup & konfigurasi */}
+      <section className="rounded-xl border border-border/60 bg-muted/20 p-6 space-y-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
-          <Inbox className="h-4 w-4" />
-          Kotak masuk WA (penampungan sementara)
+          <Settings2 className="h-4 w-4" />
+          Setup & konfigurasi
         </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Pesan dari WA masuk ke sini dulu. Klik &quot;Proses ke Activity&quot; agar sistem membaca tanggal, waktu, dan lokasi dari teks lalu memindahkan ke halaman Activity.
-        </p>
-        {inboxUnprocessed.length > 0 ? (
-          <>
-            <ul className="mt-3 space-y-2">
-              {inboxUnprocessed.map((item) => (
-                <li
-                  key={item.id}
-                  className="rounded-md border border-border bg-background/80 p-3 text-sm"
-                >
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(item.received_at).toLocaleString("id-ID")} · {item.from_number}
-                  </p>
-                  <pre className="mt-1 whitespace-pre-wrap break-words font-sans text-xs">
-                    {item.raw_body || "(kosong)"}
-                  </pre>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                disabled={isProcessing}
-                onClick={handleProcessInbox}
-                className="gap-1.5"
-              >
-                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                {isProcessing ? "Memproses…" : "Proses ke Activity"}
-              </Button>
-              {processResult && (
-                <span className={`text-sm ${processResult.error ? "text-destructive" : "text-muted-foreground"}`}>
-                  {processResult.error ?? (
-                    <>
-                      {processResult.processed} pesan diproses ke Activity.{" "}
-                      <Link href="/activity" className="underline">Buka Activity →</Link>
-                    </>
-                  )}
-                </span>
-              )}
-            </div>
-          </>
-        ) : (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Tidak ada pesan yang belum diproses. Kirim pesan ke nomor Business agar muncul di sini.
-          </p>
-        )}
-      </section>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Callback URL (untuk Meta)
-        </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Paste URL ini di Meta for Developers → WhatsApp → Configuration → Callback URL.
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <code className="flex-1 min-w-0 rounded bg-muted px-2 py-2 text-sm text-foreground break-all">
-            {callbackUrl ?? "https://NAMA-PROJECT.vercel.app/api/webhooks/whatsapp"}
-          </code>
-          {callbackUrl && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleCopyCallback}
-              className="shrink-0"
-            >
-              {copied ? (
-                <>
-                  <Check className="mr-1.5 h-4 w-4 text-green-600" />
-                  Disalin
-                </>
-              ) : (
-                <>
-                  <Copy className="mr-1.5 h-4 w-4" />
-                  Salin
-                </>
-              )}
-            </Button>
+        <div>
+          <h3 className="text-sm font-medium text-foreground">Callback URL (untuk Meta)</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Paste URL ini di Meta for Developers → WhatsApp → Configuration → Callback URL.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="flex-1 min-w-0 rounded bg-muted px-2 py-2 text-sm text-foreground break-all">
+              {callbackUrl ?? "https://NAMA-PROJECT.vercel.app/api/webhooks/whatsapp"}
+            </code>
+            {callbackUrl && (
+              <Button type="button" variant="outline" size="sm" onClick={handleCopyCallback} className="shrink-0">
+                {copied ? (
+                  <>
+                    <Check className="mr-1.5 h-4 w-4 text-green-600" />
+                    Disalin
+                  </>
+                ) : (
+                  <>
+                    <Copy className="mr-1.5 h-4 w-4" />
+                    Salin
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+          {!callbackUrl && (
+            <p className="mt-2 text-xs text-amber-600">
+              Deploy di Vercel agar URL terisi. Atau isi manual dengan domain Anda.
+            </p>
           )}
         </div>
-        {!callbackUrl && (
-          <p className="mt-2 text-xs text-amber-600">
-            Deploy di Vercel agar URL otomatis terisi. Atau ganti manual dengan domain Anda.
+
+        <div>
+          <h3 className="text-sm font-medium text-foreground">Environment (Vercel)</h3>
+          <ul className="mt-2 space-y-1.5 text-sm">
+            <li className="flex items-center gap-2">
+              {hasVerifyToken ? (
+                <Check className="h-4 w-4 text-green-600 shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+              )}
+              <span className={hasVerifyToken ? "text-foreground" : "text-amber-600"}>
+                WHATSAPP_VERIFY_TOKEN {hasVerifyToken ? "sudah di-set" : "belum di-set"}
+              </span>
+            </li>
+            <li className="flex items-center gap-2">
+              {hasServiceRoleKey ? (
+                <Check className="h-4 w-4 text-green-600 shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+              )}
+              <span className={hasServiceRoleKey ? "text-foreground" : "text-amber-600"}>
+                SUPABASE_SERVICE_ROLE_KEY {hasServiceRoleKey ? "sudah di-set" : "belum di-set"}
+              </span>
+            </li>
+            <li className="flex items-center gap-2">
+              {hasSendConfig ? (
+                <Check className="h-4 w-4 text-green-600 shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+              )}
+              <span className={hasSendConfig ? "text-foreground" : "text-muted-foreground"}>
+                WHATSAPP_ACCESS_TOKEN + PHONE_NUMBER_ID {hasSendConfig ? "sudah di-set (bisa kirim pesan)" : "belum (opsional, untuk kirim pesan)"}
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-medium text-foreground">Langkah sambung ke WhatsApp</h3>
+          <ol className="mt-2 list-decimal list-inside space-y-1.5 text-sm text-muted-foreground">
+            <li>Set env di Vercel → Redeploy.</li>
+            <li>
+              <a
+                href="https://developers.facebook.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline"
+              >
+                Meta for Developers
+              </a>{" "}
+              → App → WhatsApp → Configuration: isi Callback URL dan Verify token → Verify and Save.
+            </li>
+            <li>Subscribe field <strong>messages</strong>.</li>
+            <li>WhatsApp → API Setup: hubungkan nomor untuk menerima pesan.</li>
+          </ol>
+        </div>
+
+        {allEnvSet && callbackUrl && (
+          <p className="text-xs text-muted-foreground pt-2 border-t border-border/60">
+            Tes verifikasi: buka{" "}
+            <code className="rounded bg-muted px-1 break-all">
+              {callbackUrl}?hub.mode=subscribe&hub.verify_token=TOKEN_ANDA&hub.challenge=12345
+            </code>{" "}
+            (ganti TOKEN_ANDA). Response harus: 12345.
           </p>
         )}
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Cek environment
+      {/* 2. Format pesan (cara pakai) */}
+      <section className="rounded-xl border border-border/60 bg-muted/20 p-6 space-y-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+          <BookOpen className="h-4 w-4" />
+          Format pesan agar tanggal, waktu & lokasi terbaca
         </h2>
-        <ul className="mt-2 space-y-1.5 text-sm">
-          <li className="flex items-center gap-2">
-            {hasVerifyToken ? (
-              <Check className="h-4 w-4 text-green-600 shrink-0" />
-            ) : (
-              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-            )}
-            <span className={hasVerifyToken ? "text-foreground" : "text-amber-600"}>
-              WHATSAPP_VERIFY_TOKEN {hasVerifyToken ? "sudah di-set" : "belum di-set (Vercel → Environment Variables)"}
-            </span>
-          </li>
-          <li className="flex items-center gap-2">
-            {hasServiceRoleKey ? (
-              <Check className="h-4 w-4 text-green-600 shrink-0" />
-            ) : (
-              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-            )}
-            <span className={hasServiceRoleKey ? "text-foreground" : "text-amber-600"}>
-              SUPABASE_SERVICE_ROLE_KEY {hasServiceRoleKey ? "sudah di-set" : "belum di-set (untuk simpan pesan ke Activity)"}
-            </span>
-          </li>
-        </ul>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Langkah sambung ke WhatsApp
-        </h2>
-        <ol className="mt-2 list-decimal list-inside space-y-1.5 text-sm text-muted-foreground">
-          <li>Set <code className="rounded bg-muted px-1">WHATSAPP_VERIFY_TOKEN</code> dan <code className="rounded bg-muted px-1">SUPABASE_SERVICE_ROLE_KEY</code> di Vercel → Redeploy.</li>
-          <li>Buka <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Meta for Developers</a> → App Anda → WhatsApp → Configuration.</li>
-          <li>Isi Callback URL (paste dari atas) dan Verify token (nilai sama dengan <code className="rounded bg-muted px-1">WHATSAPP_VERIFY_TOKEN</code>) → Verify and Save.</li>
-          <li>Subscribe field <strong>messages</strong>.</li>
-          <li>WhatsApp → API Setup: hubungkan nomor telepon yang dipakai untuk menerima pesan.</li>
-        </ol>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Atur waktu & lokasi lewat chat
-        </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Format yang didukung: baris pertama <strong>tanggal</strong> (contoh: Selasa, 3 Maret 2026), lalu baris kosong, lalu <strong>waktu</strong> dan <strong>lokasi</strong> (Pagi/Siang/Sore/Malam + Rumah/Toko), lalu catatan. Tanggal di baris pertama akan dipakai sebagai tanggal activity di website. Jika tidak ada tanggal/waktu/lokasi, dipakai hari ini, jam server (WITA), dan lokasi Rumah.
+        <p className="text-sm text-muted-foreground">
+          Baris pertama: <strong>tanggal</strong> (contoh: Selasa, 3 Maret 2026). Lalu baris kosong, lalu{" "}
+          <strong>waktu</strong> + <strong>lokasi</strong> (Pagi/Siang/Sore/Malam + Rumah/Toko), lalu isi catatan.
+          Sistem akan memakai nilai ini untuk Activity. Jika tidak ada, dipakai: hari ini, jam server (WITA), Rumah.
         </p>
-        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+        <ul className="text-sm text-muted-foreground space-y-0.5">
           <li><strong>Waktu:</strong> Pagi, Siang, Sore, Malam</li>
           <li><strong>Lokasi:</strong> Rumah, Toko</li>
         </ul>
-        <p className="mt-2 text-xs text-muted-foreground">Contoh format (persis seperti ini):</p>
-        <pre className="mt-1 rounded bg-muted p-2 text-xs text-muted-foreground whitespace-pre-wrap">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1">Contoh:</p>
+          <pre className="rounded bg-muted p-3 text-xs text-muted-foreground whitespace-pre-wrap font-mono">
 {`Selasa, 3 Maret 2026
 
 Pagi Toko :
 - Bersih - bersih
 - Kasi Makan`}
-        </pre>
-        <p className="mt-1 text-xs text-muted-foreground">
-          → Di website: tanggal 3 Maret 2026, waktu Pagi, lokasi Toko, catatan dua baris di atas.
+          </pre>
+          <p className="mt-1 text-xs text-muted-foreground">
+            → Activity: tanggal 3 Maret 2026, waktu Pagi, lokasi Toko.
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          <strong>Cara uji:</strong> Kirim pesan ke nomor WhatsApp Business yang terhubung → cek halaman Activity.
         </p>
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Tes parsing (localhost)
+      {/* 3. Kirim pesan (dari nomor Business ke nomor lain) */}
+      {hasSendConfig && (
+        <section className="rounded-xl border border-border/60 bg-muted/20 p-6 space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+            <Send className="h-4 w-4" />
+            Kirim pesan (dari nomor Business)
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Kirim pesan ke nomor lain sebagai nomor WhatsApp Business yang terdaftar di API. Nomor tujuan: format 62xxx (tanpa +). Penerima harus pernah mengirim pesan ke nomor Business Anda dalam 24 jam terakhir.
+          </p>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Nomor tujuan (62xxx)</label>
+            <Input
+              type="text"
+              placeholder="6281234567890"
+              value={sendTo}
+              onChange={(e) => setSendTo(e.target.value)}
+              className="font-mono"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Pesan</label>
+            <textarea
+              value={sendBody}
+              onChange={(e) => setSendBody(e.target.value)}
+              placeholder="Tulis pesan..."
+              rows={4}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={sendPending || !sendTo.trim() || !sendBody.trim()}
+              onClick={() => {
+                setSendResult(null);
+                startSendTransition(async () => {
+                  const res = await sendWhatsAppMessage(sendTo.trim(), sendBody.trim());
+                  setSendResult(res);
+                });
+              }}
+              className="gap-1.5"
+            >
+              <Send className="h-4 w-4" />
+              {sendPending ? "Mengirim…" : "Kirim"}
+            </Button>
+          </div>
+          {sendResult && (
+            <div
+              className={`rounded-md border px-3 py-2 text-sm ${
+                sendResult.ok
+                  ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
+                  : "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
+              }`}
+            >
+              {sendResult.ok ? (
+                <p className="font-medium text-green-800 dark:text-green-200">Pesan terkirim.</p>
+              ) : (
+                <p className="text-amber-800 dark:text-amber-200">{sendResult.error}</p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 4. Tes simulasi parsing */}
+      <section className="rounded-xl border border-border/60 bg-muted/20 p-6 space-y-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+          <FlaskConical className="h-4 w-4" />
+          Tes parsing (simulasi ke Activity)
         </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Tempel pesan di bawah lalu klik Simulasikan. Satu activity akan masuk ke DB dengan tanggal/waktu/lokasi hasil parsing. Cek halaman Activity.
+        <p className="text-sm text-muted-foreground">
+          Cek apakah format teks terbaca benar tanpa kirim WA. Tempel teks di bawah, klik Simulasikan → satu Activity
+          akan dibuat dengan tanggal/waktu/lokasi hasil parsing. Berguna untuk uji format sebelum kirim ke nomor Business.
         </p>
         {!hasServiceRoleKey && (
-          <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-            <strong>SUPABASE_SERVICE_ROLE_KEY</strong> belum di-set. Tambahkan di <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/50">.env.local</code> (ambil dari Supabase → Project Settings → API → <strong>service_role</strong>), lalu restart dev server (<code className="rounded bg-amber-100 px-1 dark:bg-amber-900/50">npm run dev</code>). Tanpa ini, tes simulasi dan webhook WA tidak bisa menyimpan Activity.
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            <strong>SUPABASE_SERVICE_ROLE_KEY</strong> belum di-set. Tambahkan di .env.local (Supabase → API →
+            service_role), lalu restart dev server. Tanpa ini simulasi dan webhook tidak bisa menyimpan Activity.
           </div>
         )}
         <textarea
@@ -243,9 +278,9 @@ Pagi Toko :
           onChange={(e) => setTestMessage(e.target.value)}
           placeholder={CONTOH_PESAN}
           rows={6}
-          className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-        <div className="mt-2 flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             size="sm"
@@ -264,16 +299,25 @@ Pagi Toko :
           </Button>
         </div>
         {testResult && (
-          <div className={`mt-2 rounded-md border px-3 py-2 text-sm ${testResult.ok ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30" : "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"}`}>
+          <div
+            className={`rounded-md border px-3 py-2 text-sm ${
+              testResult.ok
+                ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
+                : "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
+            }`}
+          >
             {testResult.ok ? (
               <>
                 <p className="font-medium text-green-800 dark:text-green-200">Berhasil disimpan.</p>
                 {testResult.parsed && (
                   <p className="mt-1 text-xs text-green-700 dark:text-green-300">
-                    Tanggal: {testResult.parsed.date}, Waktu: {testResult.parsed.timeSlot}, Lokasi: {testResult.parsed.location}
+                    Tanggal: {testResult.parsed.date}, Waktu: {testResult.parsed.timeSlot}, Lokasi:{" "}
+                    {testResult.parsed.location}
                   </p>
                 )}
-                <Link href="/activity" className="mt-2 inline-block text-xs font-medium text-green-700 underline dark:text-green-400">Buka Activity →</Link>
+                <Link href="/activity" className="mt-2 inline-block text-xs font-medium text-green-700 underline dark:text-green-400">
+                  Buka Activity →
+                </Link>
               </>
             ) : (
               <p className="text-amber-800 dark:text-amber-200">{testResult.error}</p>
@@ -282,36 +326,8 @@ Pagi Toko :
         )}
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Pesan terakhir dari WA (untuk cek parsing)
-        </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Setiap pesan yang masuk lewat webhook akan dicatat di sini. Jika tanggal/waktu/lokasi belum otomatis, bandingkan teks di bawah dengan format yang diharapkan (baris pertama tanggal, lalu baris seperti &quot;Pagi Toko :&quot;).
-        </p>
-        {lastWebhookDebug ? (
-          <div className="mt-3 rounded-md border border-border bg-muted/30 p-3 text-xs">
-            <p className="font-medium text-muted-foreground">Teks yang diterima webhook:</p>
-            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 font-mono text-[11px]">
-              {lastWebhookDebug.raw_preview || "(kosong)"}
-            </pre>
-            <p className="mt-2 font-medium text-muted-foreground">Hasil parsing:</p>
-            <ul className="mt-0.5 list-inside list-disc space-y-0.5">
-              <li>Tanggal: {lastWebhookDebug.parsed_date ?? <span className="text-amber-600">null (pakai hari ini)</span>}</li>
-              <li>Waktu: {lastWebhookDebug.parsed_time_slot ?? "—"}</li>
-              <li>Lokasi: {lastWebhookDebug.parsed_location ?? "—"}</li>
-            </ul>
-            <p className="mt-1 text-muted-foreground">Diterima: {new Date(lastWebhookDebug.received_at).toLocaleString("id-ID")}</p>
-          </div>
-        ) : (
-          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-            <p>Belum ada data di sini. Kirim satu pesan ke nomor Business, lalu refresh halaman ini.</p>
-            <p>Jika pesan sudah tampil di halaman Activity tapi tidak muncul di sini, jalankan migration Supabase agar tabel debug ada: <code className="rounded bg-muted px-1">supabase/migrations/20250227900000_webhook_whatsapp_debug.sql</code> (lewat <code className="rounded bg-muted px-1">npx supabase db push</code> atau SQL Editor di dashboard Supabase).</p>
-          </div>
-        )}
-      </section>
-
-      <section className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-4">
+      {/* 5. Link cepat */}
+      <section className="flex flex-wrap items-center gap-3">
         <Link href="/activity">
           <Button variant="secondary" size="sm" className="gap-1.5">
             <MessageCircle className="h-4 w-4" />
@@ -327,16 +343,6 @@ Pagi Toko :
           Dokumentasi Meta Webhook
         </a>
       </section>
-
-      {allEnvSet && callbackUrl && (
-        <p className="text-xs text-muted-foreground">
-          Tes verifikasi: buka{" "}
-          <code className="rounded bg-muted px-1 break-all">
-            {callbackUrl}?hub.mode=subscribe&hub.verify_token=TOKEN_ANDA&hub.challenge=12345
-          </code>
-          {" "}(ganti TOKEN_ANDA dengan nilai WHATSAPP_VERIFY_TOKEN). Response harus hanya angka 12345.
-        </p>
-      )}
     </div>
   );
 }

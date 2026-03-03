@@ -86,8 +86,17 @@ export async function POST(req: NextRequest) {
             if (err?.code === "23514" && err?.message?.includes("activity_type_check")) {
               err = (await supabase.from("daily_activities").insert({ ...row, activity_type: "Other" })).error;
             }
-            if (!err) saved++;
-            else console.error("[WhatsApp webhook] insert error:", err.message);
+            if (!err) {
+              saved++;
+              await supabase.from("activity_log").insert({
+                user_id: null,
+                action: "create",
+                entity_type: "daily_activity",
+                summary: `Activity dari WhatsApp: ${activityDate} (${parsed.timeSlot}, ${parsed.location})`,
+              });
+            } else {
+              console.error("[WhatsApp webhook] insert error:", err.message);
+            }
           } catch (e) {
             console.error("[WhatsApp webhook] insert error:", e);
           }

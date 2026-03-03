@@ -411,6 +411,12 @@ export async function deleteActivity(id: string): Promise<void> {
   const { error } = await supabase.from("daily_activities").delete().eq("id", id);
   if (error) throw new AppError(ErrorCode.DB_ERROR, error.message ?? "Gagal menghapus aktivitas.", error);
   revalidateActivity();
+  appendActivityLog({
+    action: "delete",
+    entity_type: "daily_activity",
+    entity_id: id,
+    summary: "Menghapus aktivitas",
+  }).catch(() => {});
 }
 
 export interface DeleteActivitiesResult {
@@ -454,6 +460,11 @@ export async function deleteActivities(ids: string[]): Promise<DeleteActivitiesR
 
   if (successCount > 0) {
     revalidateActivity();
+    appendActivityLog({
+      action: "delete",
+      entity_type: "daily_activity",
+      summary: `Menghapus ${successCount} aktivitas`,
+    }).catch(() => {});
   }
 
   return { successCount, failed };
