@@ -17,7 +17,6 @@ const navItems: { href: string; label: string; adminOnly?: boolean }[] = [
   { href: "/inventory", label: "Inventory" },
   { href: "/activity", label: "Activity" },
   { href: "/log", label: "Log", adminOnly: true },
-  { href: "/whatsapp", label: "WhatsApp", adminOnly: true },
 ];
 
 interface MobileNavProps {
