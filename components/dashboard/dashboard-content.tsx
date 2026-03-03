@@ -229,7 +229,12 @@ function filterCatsBySmartSearch(cats: DashboardCatRecord[], query: string): Das
     });
   }
   if (parsed.mode === "grooming") {
-    return cats.filter((c) => c.lastGroomingDate == null);
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      .toISOString()
+      .slice(0, 10);
+    // Tampilkan kucing yang belum grooming bulan ini (belum pernah, atau terakhir sebelum awal bulan ini)
+    return cats.filter((c) => !c.lastGroomingDate || c.lastGroomingDate < firstOfMonth);
   }
   if (parsed.mode === "weight_drop") {
     return cats.filter(
@@ -625,7 +630,9 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">Kata kunci yang bisa dicoba:</p>
             <div className="flex flex-wrap gap-2">
-              {(initialData.searchKeywords?.length ? initialData.searchKeywords : DASHBOARD_SEARCH_KEYWORDS).map((keyword) => (
+              {(initialData.searchKeywords?.length ? initialData.searchKeywords : DASHBOARD_SEARCH_KEYWORDS)
+                .filter((keyword) => keyword !== "sehat" && keyword !== "dirawat")
+                .map((keyword) => (
                 <button
                   key={keyword}
                   type="button"
@@ -751,6 +758,35 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
                           <p className="text-xs text-muted-foreground">
                             {[cat.breedName, formatAge(cat.dob)].filter(Boolean).join(" · ") || "—"}
                           </p>
+                          {parsedQuery.mode === "grooming" && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {cat.lastGroomingDate
+                                ? `Terakhir grooming: ${formatDateShort(cat.lastGroomingDate)} · Bulan ini belum`
+                                : "Belum pernah grooming · Bulan ini belum"}
+                            </p>
+                          )}
+                          {parsedQuery.mode === "preventive" && parsedQuery.preventiveType && (() => {
+                            const p = cat.preventive.find(
+                              (x) => x.type === parsedQuery.preventiveType,
+                            );
+                            if (!p) return null;
+                            const label =
+                              parsedQuery.preventiveType === "VACCINE"
+                                ? "Vaksin"
+                                : parsedQuery.preventiveType === "FLEA"
+                                  ? "Obat tetes kutu"
+                                  : "Obat cacing";
+                            return (
+                              <>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  Terakhir {label}: {p.lastDate ? formatDateShort(p.lastDate) : "—"}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Next {label}: {p.nextDueDate ? formatDateShort(p.nextDueDate) : "Belum dijadwalkan"}
+                                </p>
+                              </>
+                            );
+                          })()}
                           {parsedQuery.mode === "weight_gain" &&
                             cat.weight.previousKg != null &&
                             cat.weight.currentKg > cat.weight.previousKg && (

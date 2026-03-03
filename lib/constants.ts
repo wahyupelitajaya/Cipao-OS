@@ -147,8 +147,6 @@ export const DASHBOARD_SEARCH_KEYWORDS = [
   "stok habis",
   "stok rendah",
   "butuh di beli",
-  "sehat",
-  "dirawat",
 ] as const;
 
 // --- Business rules ---

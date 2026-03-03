@@ -152,9 +152,24 @@ export async function getDashboardData(
       breedName: cat.breed_id ? breedsById.get(cat.breed_id) ?? null : null,
       dob: cat.dob ?? null,
       preventive: [
-        { type: "VACCINE", nextDueDate: toYmd(suggestion.nextVaccine), lastTitle: vaccineRow?.title ?? null },
-        { type: "FLEA", nextDueDate: toYmd(suggestion.nextFlea), lastTitle: fleaRow?.title ?? null },
-        { type: "DEWORM", nextDueDate: toYmd(suggestion.nextDeworm), lastTitle: dewormRow?.title ?? null },
+        {
+          type: "VACCINE",
+          nextDueDate: toYmd(suggestion.nextVaccine),
+          lastTitle: vaccineRow?.title ?? null,
+          lastDate: vaccineRow?.date ?? null,
+        },
+        {
+          type: "FLEA",
+          nextDueDate: toYmd(suggestion.nextFlea),
+          lastTitle: fleaRow?.title ?? null,
+          lastDate: fleaRow?.date ?? null,
+        },
+        {
+          type: "DEWORM",
+          nextDueDate: toYmd(suggestion.nextDeworm),
+          lastTitle: dewormRow?.title ?? null,
+          lastDate: dewormRow?.date ?? null,
+        },
       ],
       weight: {
         currentKg: suggestion.lastWeight?.weightKg ?? 0,

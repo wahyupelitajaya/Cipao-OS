@@ -12,7 +12,13 @@ export interface DashboardCatRecord {
   breedName: string | null;
   /** Tanggal lahir (YYYY-MM-DD) untuk hitung usia. */
   dob: string | null;
-  preventive: { type: "VACCINE" | "FLEA" | "DEWORM"; nextDueDate: string | null; lastTitle: string | null }[];
+  preventive: {
+    type: "VACCINE" | "FLEA" | "DEWORM";
+    nextDueDate: string | null;
+    lastTitle: string | null;
+    /** Tanggal terakhir preventive jenis ini (YYYY-MM-DD). */
+    lastDate: string | null;
+  }[];
   weight: { currentKg: number; previousKg?: number };
   hasActiveTreatment: boolean;
   lastGroomingDate: string | null;
