@@ -82,7 +82,7 @@ export default async function CatsPage(props: CatsPageProps) {
 
   return (
     <div className="flex flex-col gap-12">
-      <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+      <header className="no-print flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-medium tracking-tight text-foreground">
             Cats
@@ -108,15 +108,24 @@ export default async function CatsPage(props: CatsPageProps) {
         </div>
       </header>
 
-      <CatsTable cats={(cats ?? []) as Cat[]} breeds={(breeds ?? []) as Breed[]} admin={admin} activeTreatmentCatIds={activeTreatmentCatIds} />
-
-      <PaginationBar
-        totalCount={totalCount ?? 0}
-        page={page}
-        pageSize={pageSize}
-        basePath="/cats"
-        searchParams={paginationSearchParams}
+      <CatsTable
+        cats={(cats ?? []) as Cat[]}
+        breeds={(breeds ?? []) as Breed[]}
+        admin={admin}
+        activeTreatmentCatIds={activeTreatmentCatIds}
+        sortBy={sortBy}
+        order={order}
       />
+
+      <div className="no-print">
+        <PaginationBar
+          totalCount={totalCount ?? 0}
+          page={page}
+          pageSize={pageSize}
+          basePath="/cats"
+          searchParams={paginationSearchParams}
+        />
+      </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   getJsonStringArray,
   validateCatStatus,
   validateCatLocation,
+  getDirawatStatusArray,
   validateSuggestedStatus,
   isValidPhotoUrl,
 } from "@/lib/validation";
@@ -191,6 +192,9 @@ export async function updateCat(formData: FormData) {
     const v = getOptionalString(formData, "is_contagious");
     updates.is_contagious = v === "true" ? true : v === "false" ? false : null;
   }
+  if (formData.has("dirawat_status_sent")) {
+    updates.dirawat_status = getDirawatStatusArray(formData, "dirawat_status");
+  }
 
   const { data, error } = await supabase
     .from("cats")
@@ -234,6 +238,7 @@ export async function bulkUpdateCats(formData: FormData) {
   const breedIdRaw = getOptionalString(formData, "breed_id");
   const treatmentNotesRaw = getOptionalString(formData, "treatment_notes");
   const isContagiousRaw = getOptionalString(formData, "is_contagious");
+  const hasDirawatStatus = formData.has("apply_dirawat_status");
 
   if (status && !validateCatStatus(status)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Sehat, Membaik, Memburuk, Hampir Sembuh, Observasi, Sakit.");
@@ -243,8 +248,8 @@ export async function bulkUpdateCats(formData: FormData) {
   }
   const hasNotes = treatmentNotesRaw != null && treatmentNotesRaw.trim() !== "";
   const hasContagious = isContagiousRaw === "true" || isContagiousRaw === "false";
-  if (!status && !location && !breedIdRaw && !hasNotes && !hasContagious) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih status, lokasi, jenis, keterangan, atau menular yang akan diubah.");
+  if (!status && !location && !breedIdRaw && !hasNotes && !hasContagious && !hasDirawatStatus) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih status, lokasi, jenis, keterangan, menular, atau status dirawat yang akan diubah.");
   }
 
   const breedId = breedIdRaw && breedIdRaw.trim() ? breedIdRaw.trim() : null;
@@ -252,12 +257,13 @@ export async function bulkUpdateCats(formData: FormData) {
   const isContagious = isContagiousRaw === "true" ? true : isContagiousRaw === "false" ? false : null;
 
   const supabase = await createSupabaseServerClient();
-  const updates: { status?: string; location?: string; breed_id?: string | null; treatment_notes?: string | null; is_contagious?: boolean | null } = {};
+  const updates: { status?: string; location?: string; breed_id?: string | null; treatment_notes?: string | null; is_contagious?: boolean | null; dirawat_status?: string[] } = {};
   if (status) updates.status = status;
   if (location) updates.location = location;
   if (breedId) updates.breed_id = breedId;
   if (treatmentNotesRaw !== undefined) updates.treatment_notes = treatmentNotes;
   if (hasContagious) updates.is_contagious = isContagious;
+  if (hasDirawatStatus) updates.dirawat_status = getDirawatStatusArray(formData, "dirawat_status");
 
   const { data: updatedRows, error } = await supabase
     .from("cats")

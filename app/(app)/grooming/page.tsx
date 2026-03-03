@@ -74,7 +74,7 @@ export default async function GroomingPage(props: GroomingPageProps) {
 
   return (
     <div className="flex flex-col gap-10">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <header className="no-print flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Grooming
@@ -90,7 +90,13 @@ export default async function GroomingPage(props: GroomingPageProps) {
         </Suspense>
       </header>
 
-      <GroomingTable rows={rows} breeds={(breeds ?? []) as Breed[]} canEdit={canEdit} />
+      <GroomingTable
+        rows={rows}
+        breeds={(breeds ?? []) as Breed[]}
+        canEdit={canEdit}
+        sortBy={sortBy}
+        order={order}
+      />
     </div>
   );
 }

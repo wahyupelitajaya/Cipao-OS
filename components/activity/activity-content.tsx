@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useTransition } from "react";
+import { Printer } from "lucide-react";
 import { getMonthActivitySummary, getDayActivities } from "@/app/actions/activity";
 import { getFriendlyMessage } from "@/lib/errors";
 import type {
@@ -9,6 +10,7 @@ import type {
   DayActivityItem,
   VisitDayState,
 } from "@/app/actions/activity";
+import { Button } from "@/components/ui/button";
 import { ActivityCalendar } from "@/components/activity/activity-calendar";
 import { ActivityDayPanel } from "@/components/activity/activity-day-panel";
 
@@ -112,9 +114,21 @@ export function ActivityContent({
     loadMonth(newYear, newMonth);
   }
 
+  function formatPrintDate(iso: string | null): string {
+    if (!iso) return "—";
+    const d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  }
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
-      <div className="min-w-0">
+      <div className="no-print col-span-full flex flex-wrap items-center gap-3">
+        <Button type="button" variant="outline" size="sm" onClick={() => window.print()} className="gap-2">
+          <Printer className="h-4 w-4 shrink-0" aria-hidden />
+          Cetak
+        </Button>
+      </div>
+      <div className="no-print min-w-0">
         {loadError && (
           <p className="mb-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
             {loadError}
@@ -133,7 +147,7 @@ export function ActivityContent({
           <p className="mt-2 text-xs text-muted-foreground">Memuat…</p>
         )}
       </div>
-      <div className="min-w-0">
+      <div className="no-print min-w-0">
         <ActivityDayPanel
           date={selectedDate}
           visit={visit}
@@ -146,6 +160,50 @@ export function ActivityContent({
               : undefined
           }
         />
+      </div>
+
+      <div
+        id="activity-print"
+        className="hidden print:block activity-print"
+        aria-hidden
+      >
+        <div className="activity-print-inner">
+          <h1 className="activity-print-title">Laporan Aktivitas</h1>
+          <p className="activity-print-date-label">
+            Tanggal: {formatPrintDate(selectedDate)}
+          </p>
+          <p className="activity-print-meta">
+            Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
+          {activities.length === 0 ? (
+            <p className="activity-print-empty">Belum ada aktivitas.</p>
+          ) : (
+            <ul className="activity-print-list">
+              {activities.map((a, i) => {
+                const firstTime = (a.time_slots ?? "").split(",")[0]?.trim() ?? "";
+                const timeClass =
+                  firstTime === "Pagi"
+                    ? "activity-print-item--pagi"
+                    : firstTime === "Siang"
+                      ? "activity-print-item--siang"
+                      : firstTime === "Sore"
+                        ? "activity-print-item--sore"
+                        : firstTime === "Malam"
+                          ? "activity-print-item--malam"
+                          : "";
+                return (
+                  <li key={a.id} className={`activity-print-item ${timeClass}`}>
+                    <span className="activity-print-item-num">{i + 1}.</span>
+                    <span className="activity-print-item-meta">
+                      {[a.time_slots, a.locations, a.categories].filter(Boolean).join(" · ")}
+                    </span>
+                    {a.note && <span className="activity-print-item-note">{a.note}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -5,10 +5,11 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { bulkUpdateCatsWithState, type BulkUpdateCatsState } from "@/app/actions/cats";
 import { Button } from "@/components/ui/button";
-import { CAT_STATUSES, CAT_LOCATIONS, CAT_STATUS_LABELS, CAT_LOCATION_LABELS } from "@/lib/constants";
+import { CAT_STATUSES, CAT_LOCATIONS, CAT_STATUS_LABELS, CAT_LOCATION_LABELS, DIRAWAT_STATUSES, DIRAWAT_STATUS_LABELS } from "@/lib/constants";
 
 const STATUS_OPTIONS = CAT_STATUSES.map((value) => ({ value, label: CAT_STATUS_LABELS[value] }));
 const LOCATION_OPTIONS = CAT_LOCATIONS.map((value) => ({ value, label: CAT_LOCATION_LABELS[value] }));
+const DIRAWAT_STATUS_OPTIONS = DIRAWAT_STATUSES.map((value) => ({ value, label: DIRAWAT_STATUS_LABELS[value] }));
 
 const selectClass =
   "flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
@@ -49,7 +50,29 @@ export function BulkEditDirawatForm({
       </p>
       <div className="space-y-1">
         <label className="text-xs font-medium text-muted-foreground">
-          Status
+          Status (bisa pilih lebih dari satu) — centang &quot;Terapkan&quot; agar dipakai
+        </label>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-input bg-muted/30 p-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="apply_dirawat_status" value="1" className="h-4 w-4 rounded border-input" />
+            Terapkan status di bawah ke semua
+          </label>
+          {DIRAWAT_STATUS_OPTIONS.map((o) => (
+            <label key={o.value} className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="dirawat_status"
+                value={o.value}
+                className="h-4 w-4 rounded border-input"
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-muted-foreground">
+          Status umum
         </label>
         <select name="status" className={selectClass} defaultValue="">
           <option value="">— Tidak ubah —</option>

@@ -98,6 +98,12 @@
 }
 
 @media print {
+  /* Agar browser tidak mengubah warna teks jadi hitam saat cetak */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   body {
     background: #ffffff !important;
   }
@@ -106,9 +112,237 @@
     display: none !important;
   }
 
+  /* Agar hanya konten laporan yang terlihat, tanpa padding layout */
+  main .container-app {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    max-width: 100% !important;
+  }
+
   .print-page {
     box-shadow: none !important;
     border-radius: 0 !important;
     padding: 0 !important;
   }
+
+  /* Laporan berat badan — tampilan cetak profesional */
+  .health-berat-print {
+    padding: 0;
+    margin: 0;
+    background: #fff;
+  }
+
+  .health-berat-print-inner {
+    padding: 0 0 1rem;
+    max-width: 100%;
+  }
+
+  .health-berat-print-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0 0 0.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .health-berat-print-date {
+    font-size: 0.8125rem;
+    color: #525252;
+    margin: 0 0 0.25rem;
+  }
+
+  .health-berat-print-sort {
+    font-size: 0.8125rem;
+    color: #525252;
+    margin: 0 0 1rem;
+  }
+
+  .health-berat-print-sort strong {
+    color: #1a1a1a;
+  }
+
+  .health-berat-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+
+  .health-berat-print-table thead {
+    border-bottom: 2px solid #1a1a1a;
+  }
+
+  .health-berat-print-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  .health-berat-print-table th:nth-child(1) { width: 2.5rem; text-align: center; }
+  .health-berat-print-table th:nth-child(4),
+  .health-berat-print-table th:nth-child(5),
+  .health-berat-print-table th:nth-child(6) { text-align: center; }
+
+  .health-berat-print-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #e5e5e5;
+    color: #262626;
+  }
+
+  .health-berat-print-table td:nth-child(1) { text-align: center; }
+  .health-berat-print-table td:nth-child(4),
+  .health-berat-print-table td:nth-child(5),
+  .health-berat-print-table td:nth-child(6) { text-align: center; }
+
+  .health-berat-print-weight-cell {
+    vertical-align: middle;
+  }
+
+  .health-berat-print-weight-date {
+    font-size: 0.75rem;
+    color: #525252;
+  }
+
+  .health-berat-print-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+
+  .health-berat-print-status {
+    font-weight: 600;
+  }
+
+  .health-berat-print-status--naik {
+    color: #166534 !important;
+  }
+
+  .health-berat-print-status--turun {
+    color: #b91c1c !important;
+  }
+
+  .health-berat-print-status--sama {
+    color: #525252 !important;
+  }
+
+  .health-berat-print-status--none {
+    color: #737373 !important;
+  }
+
+  .health-berat-print-delta {
+    display: block;
+    font-size: 0.75rem;
+  }
+
+  .health-berat-print-delta--naik {
+    color: #166534 !important;
+  }
+
+  .health-berat-print-delta--turun {
+    color: #b91c1c !important;
+  }
+
+  .health-berat-print-delta:not([class*="--"]) {
+    color: #525252 !important;
+  }
+
+  /* Laporan Health — Obat cacing / Obat kutu / Vaksin / Dirawat */
+  .health-preventive-print { padding: 0; margin: 0; background: #fff; }
+  .health-print-preventive-status { font-weight: 600; }
+  .health-berat-print-table td.health-print-preventive-status--overdue { color: #b91c1c !important; }
+  .health-berat-print-table td.health-print-preventive-status--ok { color: #166534 !important; }
+  .health-berat-print-table td.health-print-preventive-status--none { color: #737373 !important; }
+  .health-print-vaksin-type { font-weight: 500; }
+  .health-berat-print-table td.health-print-vaksin-type--f3 { color: #0369a1 !important; }
+  .health-berat-print-table td.health-print-vaksin-type--f4 { color: #7e22ce !important; }
+  .health-berat-print-table td.health-print-vaksin-type--rabies { color: #b45309 !important; }
+  .health-print-dirawat-kondisi { font-weight: 500; }
+  .health-berat-print-table td.health-print-dirawat-kondisi--sakit { color: #b91c1c !important; }
+  .health-berat-print-table td.health-print-dirawat-kondisi--memburuk { color: #b45309 !important; }
+  .health-berat-print-table td.health-print-dirawat-kondisi--membaik { color: #15803d !important; }
+  .health-berat-print-table td.health-print-dirawat-kondisi--hampir_sembuh { color: #0f766e !important; }
+  .health-print-dirawat-lokasi { font-weight: 500; }
+  .health-berat-print-table td.health-print-dirawat-lokasi--rumah { color: #166534 !important; }
+  .health-berat-print-table td.health-print-dirawat-lokasi--toko { color: #0369a1 !important; }
+  .health-berat-print-table td.health-print-dirawat-lokasi--klinik { color: #7e22ce !important; }
+
+  /* Laporan grooming */
+  .grooming-print { padding: 0; margin: 0; background: #fff; }
+  .grooming-print-inner { padding: 0 0 1rem; max-width: 100%; }
+  .grooming-print-title { font-size: 1.25rem; font-weight: 600; color: #1a1a1a; margin: 0 0 0.25rem; letter-spacing: -0.02em; }
+  .grooming-print-date { font-size: 0.8125rem; color: #525252; margin: 0 0 0.25rem; }
+  .grooming-print-sort { font-size: 0.8125rem; color: #525252; margin: 0 0 1rem; }
+  .grooming-print-sort strong { color: #1a1a1a; }
+  .grooming-print-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+  .grooming-print-table thead { border-bottom: 2px solid #1a1a1a; }
+  .grooming-print-table th { text-align: left; padding: 0.5rem 0.75rem; font-weight: 600; color: #1a1a1a; }
+  .grooming-print-table th:nth-child(1) { width: 2.5rem; text-align: center; }
+  .grooming-print-table th:nth-child(4), .grooming-print-table th:nth-child(5), .grooming-print-table th:nth-child(6) { text-align: center; }
+  .grooming-print-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e5e5; color: #262626; }
+  .grooming-print-table td:nth-child(1), .grooming-print-table td:nth-child(4), .grooming-print-table td:nth-child(5), .grooming-print-table td:nth-child(6) { text-align: center; }
+  .grooming-print-table tbody tr:nth-child(even) { background: #fafafa; }
+  .grooming-print-status--sudah { font-weight: 600; color: #166534 !important; }
+  .grooming-print-status--belum { font-weight: 600; color: #b45309 !important; }
+  .grooming-print-date-cell { vertical-align: middle; color: #262626; }
+
+  /* Laporan aktivitas */
+  .activity-print { padding: 0; margin: 0; background: #fff; }
+  .activity-print-inner { padding: 0 0 1rem; max-width: 100%; }
+  .activity-print-title { font-size: 1.25rem; font-weight: 600; color: #1a1a1a; margin: 0 0 0.25rem; letter-spacing: -0.02em; }
+  .activity-print-date-label { font-size: 1rem; font-weight: 500; color: #262626; margin: 0 0 0.25rem; }
+  .activity-print-meta { font-size: 0.8125rem; color: #525252; margin: 0 0 1rem; }
+  .activity-print-empty { font-size: 0.875rem; color: #737373; margin: 0; }
+  .activity-print-list { list-style: none; padding: 0; margin: 0; }
+  .activity-print-item { font-size: 0.875rem; padding: 0.5rem 0; border-bottom: 1px solid #e5e5e5; color: #262626; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+  .activity-print-item-num { font-weight: 600; color: #525252; min-width: 1.5rem; }
+  .activity-print-item-meta { font-weight: 500; }
+  .activity-print-item--pagi .activity-print-item-meta { color: #b45309 !important; }
+  .activity-print-item--siang .activity-print-item-meta { color: #a16207 !important; }
+  .activity-print-item--sore .activity-print-item-meta { color: #c2410c !important; }
+  .activity-print-item--malam .activity-print-item-meta { color: #5b21b6 !important; }
+  .activity-print-item:not([class*="--"]) .activity-print-item-meta { color: #525252; }
+  .activity-print-item-note { width: 100%; margin-top: 0.15rem; padding-left: 1.5rem; color: #404040; }
+
+  /* Daftar kucing */
+  .cats-print { padding: 0; margin: 0; background: #fff; }
+  .cats-print-inner { padding: 0 0 1rem; max-width: 100%; }
+  .cats-print-title { font-size: 1.25rem; font-weight: 600; color: #1a1a1a; margin: 0 0 0.25rem; letter-spacing: -0.02em; }
+  .cats-print-date { font-size: 0.8125rem; color: #525252; margin: 0 0 0.25rem; }
+  .cats-print-sort { font-size: 0.8125rem; color: #525252; margin: 0 0 1rem; }
+  .cats-print-sort strong { color: #1a1a1a; }
+  .cats-print-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+  .cats-print-table thead { border-bottom: 2px solid #1a1a1a; }
+  .cats-print-table th { text-align: left; padding: 0.5rem 0.75rem; font-weight: 600; color: #1a1a1a; }
+  .cats-print-table th:nth-child(1) { width: 2.5rem; text-align: center; }
+  .cats-print-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e5e5; color: #262626; }
+  .cats-print-table td:nth-child(1) { text-align: center; }
+  .cats-print-table tbody tr:nth-child(even) { background: #fafafa; }
+  .cats-print-status { font-weight: 500; }
+  .cats-print-status--sehat { color: #166534 !important; }
+  .cats-print-status--membaik { color: #15803d !important; }
+  .cats-print-status--hampir_sembuh { color: #0f766e !important; }
+  .cats-print-status--observasi { color: #525252 !important; }
+  .cats-print-status--memburuk { color: #b45309 !important; }
+  .cats-print-status--sakit { color: #b91c1c !important; }
+  .cats-print-lokasi { font-weight: 500; }
+  .cats-print-lokasi--rumah { color: #166534 !important; }
+  .cats-print-lokasi--toko { color: #0369a1 !important; }
+  .cats-print-lokasi--klinik { color: #7e22ce !important; }
+
+  /* Laporan inventory */
+  .inventory-print { padding: 0; margin: 0; background: #fff; }
+  .inventory-print-inner { padding: 0 0 1rem; max-width: 100%; }
+  .inventory-print-title { font-size: 1.25rem; font-weight: 600; color: #1a1a1a; margin: 0 0 0.25rem; letter-spacing: -0.02em; }
+  .inventory-print-date { font-size: 0.8125rem; color: #525252; margin: 0 0 0.25rem; }
+  .inventory-print-summary { font-size: 0.8125rem; color: #525252; margin: 0 0 1rem; }
+  .inventory-print-category { margin-bottom: 1.25rem; }
+  .inventory-print-category-title { font-size: 0.875rem; font-weight: 600; color: #1a1a1a; margin: 0 0 0.5rem; }
+  .inventory-print-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 0.5rem; }
+  .inventory-print-table thead { border-bottom: 2px solid #1a1a1a; }
+  .inventory-print-table th { text-align: left; padding: 0.4rem 0.75rem; font-weight: 600; color: #1a1a1a; }
+  .inventory-print-table td { padding: 0.4rem 0.75rem; border-bottom: 1px solid #e5e5e5; color: #262626; }
+  .inventory-print-table td:nth-child(1) { text-align: center; width: 2.5rem; }
+  .inventory-print-table td:nth-child(3), .inventory-print-table td:nth-child(4), .inventory-print-table td:nth-child(5) { text-align: center; }
+  .inventory-print-empty { text-align: center; color: #737373; }
+  .inventory-print-status--out { color: #b91c1c !important; font-weight: 500; }
+  .inventory-print-status--low { color: #b45309 !important; font-weight: 500; }
+  .inventory-print-status--ok { color: #166534 !important; font-weight: 500; }
 }

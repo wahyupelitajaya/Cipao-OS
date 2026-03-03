@@ -5,6 +5,7 @@
 import {
   CAT_STATUSES,
   CAT_LOCATIONS,
+  DIRAWAT_STATUSES,
   HEALTH_TYPES,
   PREVENTIVE_TYPES,
   INVENTORY_MOVEMENT_REASONS,
@@ -15,6 +16,7 @@ import {
 import type {
   CatStatus,
   CatLocation,
+  DirawatStatus,
   HealthType,
   PreventiveType,
   InventoryMovementReason,
@@ -126,6 +128,18 @@ export function validateCatStatus(value: string): value is CatStatus {
 
 export function validateCatLocation(value: string): value is CatLocation {
   return (CAT_LOCATIONS as readonly string[]).includes(value);
+}
+
+export function validateDirawatStatus(value: string): value is DirawatStatus {
+  return (DIRAWAT_STATUSES as readonly string[]).includes(value);
+}
+
+/** Returns array of dirawat_status from form (e.g. checkboxes name="dirawat_status"). Only includes valid values. */
+export function getDirawatStatusArray(formData: FormData, key: string): DirawatStatus[] {
+  const all = formData.getAll(key);
+  return all
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((v): v is DirawatStatus => v !== "" && validateDirawatStatus(v));
 }
 
 export function validateHealthType(value: string): value is HealthType {

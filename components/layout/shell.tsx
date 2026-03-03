@@ -36,7 +36,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       {/* Sidebar: fixed, tidak ikut scroll */}
-      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-36 flex-col overflow-y-auto border-r border-border bg-background-elevated shadow-soft lg:flex">
+      <aside className="no-print fixed left-0 top-0 z-30 hidden h-screen w-36 flex-col overflow-y-auto border-r border-border bg-background-elevated shadow-soft lg:flex">
         <div className="flex flex-1 flex-col px-3 py-5">
           <Link
             href="/dashboard"
@@ -72,7 +72,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
       {/* Main: area kanan dengan top bar (pencarian) + content */}
       <div className="flex min-h-screen flex-1 flex-col min-w-0 lg:pl-36">
         {/* Top bar: pencarian di atas — mobile: logo + search + logout; desktop: search + logout */}
-        <header className="sticky top-0 z-20 flex min-w-0 items-center gap-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:gap-4 sm:px-6 lg:px-8">
+        <header className="no-print sticky top-0 z-20 flex min-w-0 items-center gap-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:gap-4 sm:px-6 lg:px-8">
           <MobileNav email={profile?.email} role={profile?.role} />
           <Link href="/dashboard" className="flex shrink-0 items-center gap-2 min-w-0 lg:hidden">
             <Image

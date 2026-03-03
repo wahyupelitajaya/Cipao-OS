@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EditCatDialog } from "@/components/cats/edit-cat-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { bulkUpdateCats, deleteCat } from "@/app/actions/cats";
 import { getFriendlyMessage } from "@/lib/errors";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Tables } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { CAT_STATUSES, CAT_STATUS_LABELS } from "@/lib/constants";
 
 type Cat = Tables<"cats">;
@@ -27,12 +29,28 @@ const LOCATION_OPTIONS = [
   { value: "klinik", label: "Klinik" },
 ] as const;
 
+type CatsSortBy = "name" | "dob" | "status" | "location";
+type CatsSortOrder = "asc" | "desc";
+
 interface CatsTableProps {
   cats: Cat[];
   breeds: Breed[];
   admin: boolean;
   /** Id kucing yang punya perawatan aktif (muncul di tab Dirawat). Jika tidak di list ini = dianggap sehat. */
   activeTreatmentCatIds?: string[];
+  sortBy?: CatsSortBy;
+  order?: CatsSortOrder;
+}
+
+function getCatsSortLabel(sortBy: CatsSortBy, order: CatsSortOrder): string {
+  const asc = order === "asc";
+  switch (sortBy) {
+    case "name": return asc ? "Nama (A–Z)" : "Nama (Z–A)";
+    case "dob": return asc ? "Tanggal lahir (termuda dulu)" : "Tanggal lahir (tertua dulu)";
+    case "status": return asc ? "Status (A–Z)" : "Status (Z–A)";
+    case "location": return asc ? "Lokasi (A–Z)" : "Lokasi (Z–A)";
+    default: return "Nama (A–Z)";
+  }
 }
 
 function formatDob(dob: string | null | undefined): string {
@@ -154,7 +172,7 @@ function BreedCountSummary({
   );
 }
 
-export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [] }: CatsTableProps) {
+export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [], sortBy = "name", order = "asc" }: CatsTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -233,7 +251,15 @@ export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [] }: C
 
   return (
     <div className="space-y-4">
-      <BreedCountSummary cats={cats} breeds={breeds} />
+      <div className="no-print flex flex-wrap items-center gap-3">
+        <Button type="button" variant="outline" size="sm" onClick={() => window.print()} className="gap-2">
+          <Printer className="h-4 w-4 shrink-0" aria-hidden />
+          Cetak
+        </Button>
+      </div>
+      <div className="no-print">
+        <BreedCountSummary cats={cats} breeds={breeds} />
+      </div>
 
       {admin && selectedCount > 0 && (
         <form
@@ -300,7 +326,7 @@ export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [] }: C
         </form>
       )}
 
-      <div className="w-full min-w-0 overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
+      <div className="no-print w-full min-w-0 overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b text-xs uppercase tracking-[0.16em] text-muted-foreground">
@@ -426,6 +452,65 @@ export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [] }: C
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div id="cats-print" className="hidden print:block cats-print" aria-hidden>
+        <div className="cats-print-inner">
+          <h1 className="cats-print-title">Daftar Kucing</h1>
+          <p className="cats-print-date">
+            Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
+          <p className="cats-print-sort">
+            Data diurutkan berdasarkan: <strong>{getCatsSortLabel(sortBy, order)}</strong>
+          </p>
+          <table className="cats-print-table">
+            <thead>
+              <tr>
+                <th>No.</th>
+                <th>Nama</th>
+                <th>ID</th>
+                <th>Ras</th>
+                <th>Umur</th>
+                <th>Status</th>
+                <th>Lokasi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cats.map((cat, index) => {
+                const inDirawat = activeTreatmentSet.has(cat.id) || cat.status === "sakit" || cat.status === "memburuk";
+                const displayStatus = inDirawat ? (cat.status ?? "sehat") : "sehat";
+                return (
+                  <tr key={cat.id}>
+                    <td>{index + 1}</td>
+                    <td className="font-medium">{cat.name ?? "—"}</td>
+                    <td>{cat.cat_id ?? "—"}</td>
+                    <td>{cat.breed_id && breedsById.get(cat.breed_id)?.name ? breedsById.get(cat.breed_id)!.name : "—"}</td>
+                    <td>{formatAge(cat.dob)}</td>
+                    <td className={cn(
+                      "cats-print-status",
+                      displayStatus === "sehat" && "cats-print-status--sehat",
+                      displayStatus === "membaik" && "cats-print-status--membaik",
+                      displayStatus === "hampir_sembuh" && "cats-print-status--hampir_sembuh",
+                      displayStatus === "observasi" && "cats-print-status--observasi",
+                      displayStatus === "memburuk" && "cats-print-status--memburuk",
+                      displayStatus === "sakit" && "cats-print-status--sakit",
+                    )}>
+                      {statusLabel(displayStatus)}
+                    </td>
+                    <td className={cn(
+                      "cats-print-lokasi",
+                      cat.location === "rumah" && "cats-print-lokasi--rumah",
+                      cat.location === "toko" && "cats-print-lokasi--toko",
+                      cat.location === "klinik" && "cats-print-lokasi--klinik",
+                    )}>
+                      {locationLabel(cat.location)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {admin && (

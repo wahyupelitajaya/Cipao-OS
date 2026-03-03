@@ -28,7 +28,7 @@ export default async function ActivityPage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <header>
+      <header className="no-print">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Aktivitas
         </h1>

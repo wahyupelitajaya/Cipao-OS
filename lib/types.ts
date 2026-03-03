@@ -34,6 +34,8 @@ export type Database = {
           treatment_notes: string | null;
           /** Apakah menular: true / false / null (belum ditentukan). */
           is_contagious: boolean | null;
+          /** Status detail dirawat (multi-select): tidak_ada_perubahan, ada_perubahan, parah, dll. */
+          dirawat_status: string[] | null;
         };
       };
       cat_breeds: {

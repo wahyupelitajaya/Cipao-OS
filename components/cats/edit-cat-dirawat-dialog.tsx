@@ -37,7 +37,7 @@ export function EditCatDirawatDialog({
       <DialogContent className="flex max-h-[90vh] flex-col p-0">
         <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-4">
           <DialogTitle>
-            {cat ? `Edit kondisi — ${cat.name}` : "Edit kondisi"}
+            {cat ? `Edit status — ${cat.name}` : "Edit status"}
           </DialogTitle>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">

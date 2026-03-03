@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useActionState } from "react";
 import { useEffect, useRef, useState } from "react";
+import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -55,8 +56,14 @@ export function InventoryContent({
 
   return (
     <>
+      <div className="no-print flex flex-wrap items-center gap-3">
+        <Button type="button" variant="outline" size="sm" onClick={() => window.print()} className="gap-2">
+          <Printer className="h-4 w-4 shrink-0" aria-hidden />
+          Cetak
+        </Button>
+      </div>
       {admin && (
-        <section className="card border-b border-border pb-6">
+        <section className="no-print card border-b border-border pb-6">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Kelola kategori
           </h2>
@@ -64,7 +71,7 @@ export function InventoryContent({
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <section className="no-print grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div className="card px-5 py-4">
           <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">{items.length}</p>
           <p className="mt-1 text-xs font-medium text-muted-foreground">Total item</p>
@@ -79,7 +86,7 @@ export function InventoryContent({
         </div>
       </section>
 
-      <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="no-print grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {categories.map((category) => (
           <InventorySection
             key={category.id}
@@ -89,6 +96,60 @@ export function InventoryContent({
             onSuccess={() => router.refresh()}
           />
         ))}
+      </div>
+
+      <div id="inventory-print" className="hidden print:block inventory-print" aria-hidden>
+        <div className="inventory-print-inner">
+          <h1 className="inventory-print-title">Laporan Inventory</h1>
+          <p className="inventory-print-date">
+            Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
+          <p className="inventory-print-summary">
+            Total item: {items.length} · Stok rendah: {lowCount} · Habis: {outCount}
+          </p>
+          {categories.map((category) => {
+            const catItems = byCategoryId.get(category.id) ?? [];
+            return (
+              <div key={category.id} className="inventory-print-category">
+                <h2 className="inventory-print-category-title">{category.name}</h2>
+                <table className="inventory-print-table">
+                  <thead>
+                    <tr>
+                      <th>No.</th>
+                      <th>Nama item</th>
+                      <th>Stok</th>
+                      <th>Min. stok</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {catItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="inventory-print-empty">Belum ada item.</td>
+                      </tr>
+                    ) : (
+                      catItems.map((item, i) => (
+                        <tr key={item.id}>
+                          <td>{i + 1}</td>
+                          <td className="font-medium">{item.name}</td>
+                          <td className="tabular-nums">{item.stock_qty ?? 0}</td>
+                          <td className="tabular-nums">{item.min_stock_qty ?? "—"}</td>
+                          <td className={cn(
+                            getStockStatus(item) === "out" && "inventory-print-status--out",
+                            getStockStatus(item) === "low" && "inventory-print-status--low",
+                            getStockStatus(item) === "ok" && "inventory-print-status--ok",
+                          )}>
+                            {getStockStatus(item) === "out" ? "Habis" : getStockStatus(item) === "low" ? "Rendah" : "Aman"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </>
   );

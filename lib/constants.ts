@@ -24,6 +24,32 @@ export const CAT_LOCATION_LABELS: Record<CatLocation, string> = {
   klinik: "Klinik",
 };
 
+/** Status detail dirawat (multi-select). Ditampilkan di kolom Status tab Dirawat. */
+export const DIRAWAT_STATUSES = [
+  "tidak_ada_perubahan",
+  "ada_perubahan",
+  "parah",
+  "sedang",
+  "ringan",
+  "mau_makan",
+  "tidak_mau_makan",
+  "lemes",
+  "seger",
+] as const;
+export type DirawatStatus = (typeof DIRAWAT_STATUSES)[number];
+
+export const DIRAWAT_STATUS_LABELS: Record<DirawatStatus, string> = {
+  tidak_ada_perubahan: "Tidak ada perubahan",
+  ada_perubahan: "Ada perubahan",
+  parah: "Parah",
+  sedang: "Sedang",
+  ringan: "Ringan",
+  mau_makan: "Mau makan",
+  tidak_mau_makan: "Tidak mau makan",
+  lemes: "Lemes",
+  seger: "Seger",
+};
+
 // --- Health / Preventive ---
 export const HEALTH_TYPES = [
   "VACCINE",

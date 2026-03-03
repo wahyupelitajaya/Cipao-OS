@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EditGroomingDialog } from "@/components/grooming/edit-grooming-dialog";
@@ -23,11 +24,21 @@ export interface GroomingRow {
   previous: GroomingLog | null;
 }
 
+type GroomingSortBy = "date" | "name";
+type GroomingSortOrder = "asc" | "desc";
+
 interface GroomingTableProps {
   rows: GroomingRow[];
   breeds: Breed[];
   /** Admin or groomer can edit; owner is read-only. */
   canEdit: boolean;
+  sortBy?: GroomingSortBy;
+  order?: GroomingSortOrder;
+}
+
+function getGroomingSortLabel(sortBy: GroomingSortBy, order: GroomingSortOrder): string {
+  if (sortBy === "name") return order === "asc" ? "Nama (A–Z)" : "Nama (Z–A)";
+  return order === "asc" ? "Tanggal grooming (lama ke baru)" : "Tanggal grooming (baru ke lama)";
 }
 
 function formatDate(date: Date): string {
@@ -78,7 +89,7 @@ function formatAge(dob: string | null | undefined): string {
   }
 }
 
-export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
+export function GroomingTable({ rows, breeds, canEdit, sortBy = "date", order = "asc" }: GroomingTableProps) {
   const router = useRouter();
   const breedsById = new Map(breeds.map((b) => [b.id, b]));
   const [isPending, startTransition] = useTransition();
@@ -145,6 +156,18 @@ export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
 
   return (
     <div className="space-y-6">
+      <div className="no-print flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => window.print()}
+          className="gap-2"
+        >
+          <Printer className="h-4 w-4 shrink-0" aria-hidden />
+          Cetak
+        </Button>
+      </div>
       {canEdit && selectedCount > 0 && (
         <div className="space-y-3">
           <form
@@ -199,7 +222,7 @@ export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
         </div>
       )}
 
-      <div className="w-full min-w-0 overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
+      <div className="no-print w-full min-w-0 overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -354,6 +377,58 @@ export function GroomingTable({ rows, breeds, canEdit }: GroomingTableProps) {
           loading={isPending}
         />
       )}
+
+      <div
+        id="grooming-print"
+        className="hidden print:block grooming-print"
+        aria-hidden
+      >
+        <div className="grooming-print-inner">
+          <h1 className="grooming-print-title">Laporan Grooming</h1>
+          <p className="grooming-print-date">
+            Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
+          <p className="grooming-print-sort">
+            Data diurutkan berdasarkan: <strong>{getGroomingSortLabel(sortBy, order)}</strong>
+          </p>
+          <table className="grooming-print-table">
+            <thead>
+              <tr>
+                <th>No.</th>
+                <th>Nama Kucing</th>
+                <th>Ras | Umur</th>
+                <th>Status bulan ini</th>
+                <th>Grooming terbaru</th>
+                <th>Grooming sebelumnya</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ cat, last, previous }, index) => (
+                <tr key={cat.id}>
+                  <td>{index + 1}</td>
+                  <td className="font-medium">{cat.name ?? cat.cat_id ?? "—"}</td>
+                  <td>
+                    {cat.breed_id && breedsById.get(cat.breed_id)?.name
+                      ? breedsById.get(cat.breed_id)!.name
+                      : "—"}
+                    {" | "}
+                    {formatAge(cat.dob)}
+                  </td>
+                  <td className={isGroomedThisMonth(last?.date) ? "grooming-print-status--sudah" : "grooming-print-status--belum"}>
+                    {isGroomedThisMonth(last?.date) ? "Sudah" : "Belum"}
+                  </td>
+                  <td className="grooming-print-date-cell">
+                    {last ? formatDate(new Date(last.date)) : "—"}
+                  </td>
+                  <td className="grooming-print-date-cell">
+                    {previous ? formatDate(new Date(previous.date)) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

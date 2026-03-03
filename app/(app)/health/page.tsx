@@ -66,7 +66,7 @@ export default async function HealthPage(props: HealthPageProps) {
 
   return (
     <div className="flex flex-col gap-12 w-full min-w-0">
-      <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+      <header className="no-print flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-medium tracking-tight text-foreground">
             Health
@@ -84,7 +84,14 @@ export default async function HealthPage(props: HealthPageProps) {
       </header>
 
       <div className="w-full min-w-0">
-        <HealthTable rows={rows} breeds={(breeds ?? []) as Breed[]} admin={admin} initialTab={initialTab} />
+        <HealthTable
+          rows={rows}
+          breeds={(breeds ?? []) as Breed[]}
+          admin={admin}
+          initialTab={initialTab}
+          sortBy={sortBy}
+          order={order}
+        />
       </div>
     </div>
   );

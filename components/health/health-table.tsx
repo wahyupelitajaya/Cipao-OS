@@ -20,11 +20,13 @@ import {
 } from "@/components/ui/dialog";
 import { EditCatDirawatDialog } from "@/components/cats/edit-cat-dirawat-dialog";
 import { BulkEditDirawatDialog } from "@/components/cats/bulk-edit-dirawat-dialog";
+import { Printer } from "lucide-react";
 import { parseLocalDateString } from "@/lib/dates";
-import { CAT_STATUS_LABELS } from "@/lib/constants";
+import { CAT_STATUS_LABELS, DIRAWAT_STATUS_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/lib/types";
 import type { StatusSuggestion } from "@/lib/cat-status";
+import type { HealthSortBy, HealthSortOrder } from "@/lib/data/health";
 
 type Cat = Tables<"cats">;
 type Breed = Tables<"cat_breeds">;
@@ -58,6 +60,28 @@ interface HealthTableProps {
   admin: boolean;
   /** Tab aktif dari URL (agar setelah pencarian/refresh tetap di tab yang sama). */
   initialTab?: SectionKey;
+  /** Untuk keterangan di hasil cetak (tab Berat badan). */
+  sortBy?: HealthSortBy;
+  order?: HealthSortOrder;
+}
+
+/** Label Indonesia untuk urutan di laporan cetak. */
+function getSortLabel(sortBy: HealthSortBy, order: HealthSortOrder): string {
+  const asc = order === "asc";
+  switch (sortBy) {
+    case "name":
+      return asc ? "Nama (A–Z)" : "Nama (Z–A)";
+    case "cat_id":
+      return asc ? "ID kucing (A–Z)" : "ID kucing (Z–A)";
+    case "dob":
+      return asc ? "Umur (termuda dulu)" : "Umur (tertua dulu)";
+    case "weight":
+      return asc ? "Berat (ringan ke berat)" : "Berat (berat ke ringan)";
+    case "weight_status":
+      return asc ? "Status (turun → sama → naik)" : "Status (naik → sama → turun)";
+    default:
+      return "Nama (A–Z)";
+  }
 }
 
 function formatDateShort(date: Date): string {
@@ -275,7 +299,7 @@ function StatusBadge({
 
 type SectionKey = "berat" | "obatCacing" | "obatKutu" | "vaksin" | "dirawat";
 
-export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: HealthTableProps) {
+export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy = "weight", order = "asc" }: HealthTableProps) {
   const breedsById = new Map(breeds.map((b) => [b.id, b]));
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -584,7 +608,8 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
           setSembuhConfirmIds(null);
         }}
       />
-      {/* Tab + kontrol tampilan */}
+      {/* Tab + kontrol tampilan — disembunyikan saat cetak */}
+      <div className="no-print space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-muted/30 p-1">
           {tabs.map(({ key, label }) => (
@@ -615,6 +640,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
             ))}
           </select>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => window.print()}
+          className="gap-2"
+        >
+          <Printer className="h-4 w-4 shrink-0" aria-hidden />
+          Cetak
+        </Button>
       </div>
 
       <div className="w-full overflow-hidden" style={{ maxWidth: "100%" }}>
@@ -822,11 +857,13 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
 
       {activeTab === "berat" && (
       <section className="w-full min-w-0">
-        <h2 className="mb-3">
-          <span className="inline-flex rounded-full border border-slate-200/80 bg-slate-100/80 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-slate-700 shadow-sm">
-            Berat badan
-          </span>
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h2 className="m-0">
+            <span className="inline-flex rounded-full border border-slate-200/80 bg-slate-100/80 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-slate-700 shadow-sm">
+              Berat badan
+            </span>
+          </h2>
+        </div>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[560px] w-full text-sm">
             <thead>
@@ -1309,7 +1346,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                       </th>
                     )}
                     <th className="px-5 py-3 text-left">Cat</th>
-                    <th className="min-w-[10rem] px-5 py-3 text-left">Kondisi</th>
+                    <th className="min-w-[10rem] px-5 py-3 text-left">Status</th>
                     <th className="min-w-[6rem] px-5 py-3 text-left">Lokasi</th>
                     <th className="min-w-[6rem] px-5 py-3 text-left">Menular</th>
                     <th className="min-w-[10rem] px-5 py-3 text-left">Keterangan</th>
@@ -1325,26 +1362,24 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                     </tr>
                   ) : (
                     dirawatRows.map((row) => {
-                      const kondisi =
-                        row.suggestion.reasons.length > 0
-                          ? row.suggestion.reasons.join(" · ")
-                          : statusLabel(row.cat.status) || "—";
-                      const st = row.cat.status;
-                      const statusCapsuleClass: Record<string, string> = {
-                        sehat: "bg-emerald-100 text-emerald-800 border border-emerald-200/80",
-                        membaik: "bg-green-100 text-green-800 border border-green-200/80",
-                        hampir_sembuh: "bg-teal-100 text-teal-800 border border-teal-200/80",
-                        observasi: "bg-slate-100 text-slate-700 border border-slate-200/80",
-                        memburuk: "bg-amber-100 text-amber-800 border border-amber-200/80",
-                        sakit: "bg-rose-100 text-rose-800 border border-rose-200/80",
-                      };
-                      const kondisiEl =
-                        st && statusCapsuleClass[st] ? (
-                          <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", statusCapsuleClass[st])}>
-                            {statusLabel(st)}
-                          </span>
+                      const dirawatStatusList = Array.isArray(row.cat.dirawat_status) ? row.cat.dirawat_status : [];
+                      const statusTags = dirawatStatusList.length > 0
+                        ? dirawatStatusList.map((key) => DIRAWAT_STATUS_LABELS[key as keyof typeof DIRAWAT_STATUS_LABELS] ?? key)
+                        : [];
+                      const statusEl =
+                        statusTags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {statusTags.map((label) => (
+                              <span
+                                key={label}
+                                className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200/80"
+                              >
+                                {label}
+                              </span>
+                            ))}
+                          </div>
                         ) : (
-                          <span className="text-muted-foreground">{kondisi}</span>
+                          <span className="text-muted-foreground">—</span>
                         );
                       const lokasiEl =
                         row.cat.location === "rumah" ? (
@@ -1387,7 +1422,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
                             <CatCell cat={row.cat} />
                           </td>
                           <td className="px-5 py-3 align-middle text-xs">
-                            {kondisiEl}
+                            {statusEl}
                           </td>
                           <td className="px-5 py-3 align-middle text-xs">
                             {lokasiEl}
@@ -1540,6 +1575,291 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat" }: Healt
       })()}
         </div>
       </div>
+      </div>
+
+      {/* Tampilan cetak per tab — tampil saat print sesuai tab aktif */}
+      {activeTab === "berat" && (
+        <div
+          id="health-berat-print"
+          className="hidden print:block health-berat-print"
+          aria-hidden
+        >
+          <div className="health-berat-print-inner">
+            <h1 className="health-berat-print-title">Laporan Berat Badan Kucing</h1>
+            <p className="health-berat-print-date">
+              Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </p>
+            <p className="health-berat-print-sort">
+              Data diurutkan berdasarkan: <strong>{getSortLabel(sortBy, order)}</strong>
+            </p>
+            <table className="health-berat-print-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Nama Kucing</th>
+                  <th>Ras | Umur</th>
+                  <th>Status</th>
+                  <th>Berat terbaru</th>
+                  <th>Berat sebelumnya</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => {
+                  const { label: trendLabel, deltaKg } = getWeightTrend(row.suggestion.lastWeight ?? null, row.previousWeight);
+                  const lastW = row.suggestion.lastWeight;
+                  const prevW = row.previousWeight;
+                  return (
+                    <tr key={row.cat.id}>
+                      <td>{index + 1}</td>
+                      <td className="font-medium">{row.cat.name ?? row.cat.cat_id ?? "—"}</td>
+                      <td>
+                        {row.cat.breed_id && breedsById.get(row.cat.breed_id)?.name
+                          ? breedsById.get(row.cat.breed_id)!.name
+                          : "—"}
+                        {" | "}
+                        {formatAge(row.cat.dob)}
+                      </td>
+                      <td>
+                        <span
+                          className={cn(
+                            "health-berat-print-status",
+                            trendLabel === "Naik" && "health-berat-print-status--naik",
+                            trendLabel === "Turun" && "health-berat-print-status--turun",
+                            trendLabel === "Sama" && "health-berat-print-status--sama",
+                            trendLabel === "—" && "health-berat-print-status--none",
+                          )}
+                        >
+                          {trendLabel}
+                        </span>
+                        {deltaKg !== null && (
+                          <span
+                            className={cn(
+                              "health-berat-print-delta",
+                              trendLabel === "Naik" && "health-berat-print-delta--naik",
+                              trendLabel === "Turun" && "health-berat-print-delta--turun",
+                            )}
+                          >
+                            {deltaKg > 0 ? `+${deltaKg.toFixed(2)} kg` : deltaKg < 0 ? `${deltaKg.toFixed(2)} kg` : "0 kg"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="health-berat-print-weight-cell">
+                        {lastW ? (
+                          <>
+                            <span className="tabular-nums">{Number(lastW.weightKg).toFixed(2)} kg</span>
+                            <br />
+                            <span className="health-berat-print-weight-date">{formatDateShort(new Date(lastW.date))}</span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="health-berat-print-weight-cell">
+                        {prevW ? (
+                          <>
+                            <span className="tabular-nums">{Number(prevW.weightKg).toFixed(2)} kg</span>
+                            <br />
+                            <span className="health-berat-print-weight-date">{formatDateShort(new Date(prevW.date))}</span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "obatCacing" && (
+        <div id="health-obatCacing-print" className="hidden print:block health-preventive-print" aria-hidden>
+          <div className="health-berat-print-inner">
+            <h1 className="health-berat-print-title">Laporan Obat Cacing</h1>
+            <p className="health-berat-print-date">
+              Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </p>
+            <p className="health-berat-print-sort">Data diurutkan berdasarkan: <strong>{getSortLabel(sortBy, order)}</strong></p>
+            <table className="health-berat-print-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Nama Kucing</th>
+                  <th>Ras | Umur</th>
+                  <th>Status</th>
+                  <th>Jenis</th>
+                  <th>Last</th>
+                  <th>Next due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => {
+                  const { status, keterangan } = getPreventiveStatus(row.lastDewormLog?.next_due_date ?? null);
+                  const log = row.lastDewormLog;
+                  return (
+                    <tr key={row.cat.id}>
+                      <td>{i + 1}</td>
+                      <td className="font-medium">{row.cat.name ?? row.cat.cat_id ?? "—"}</td>
+                      <td>{row.cat.breed_id && breedsById.get(row.cat.breed_id)?.name ? breedsById.get(row.cat.breed_id)!.name : "—"} | {formatAge(row.cat.dob)}</td>
+                      <td className={cn("health-print-preventive-status", status === "Terlambat" && "health-print-preventive-status--overdue", status === "Aman" && "health-print-preventive-status--ok", status === "—" && "health-print-preventive-status--none")}>{status}</td>
+                      <td>{log?.title?.trim() || "—"}</td>
+                      <td className="health-berat-print-weight-cell">{log ? formatDateShort(new Date(log.date)) : "—"}</td>
+                      <td className="health-berat-print-weight-cell">{log?.next_due_date ? formatDateShort(new Date(log.next_due_date)) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "obatKutu" && (
+        <div id="health-obatKutu-print" className="hidden print:block health-preventive-print" aria-hidden>
+          <div className="health-berat-print-inner">
+            <h1 className="health-berat-print-title">Laporan Obat Kutu</h1>
+            <p className="health-berat-print-date">
+              Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </p>
+            <p className="health-berat-print-sort">Data diurutkan berdasarkan: <strong>{getSortLabel(sortBy, order)}</strong></p>
+            <table className="health-berat-print-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Nama Kucing</th>
+                  <th>Ras | Umur</th>
+                  <th>Status</th>
+                  <th>Jenis</th>
+                  <th>Last</th>
+                  <th>Next due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => {
+                  const { status } = getPreventiveStatus(row.lastFleaLog?.next_due_date ?? null);
+                  const log = row.lastFleaLog;
+                  return (
+                    <tr key={row.cat.id}>
+                      <td>{i + 1}</td>
+                      <td className="font-medium">{row.cat.name ?? row.cat.cat_id ?? "—"}</td>
+                      <td>{row.cat.breed_id && breedsById.get(row.cat.breed_id)?.name ? breedsById.get(row.cat.breed_id)!.name : "—"} | {formatAge(row.cat.dob)}</td>
+                      <td className={cn("health-print-preventive-status", status === "Terlambat" && "health-print-preventive-status--overdue", status === "Aman" && "health-print-preventive-status--ok", status === "—" && "health-print-preventive-status--none")}>{status}</td>
+                      <td>{log?.title?.trim() || "—"}</td>
+                      <td className="health-berat-print-weight-cell">{log ? formatDateShort(new Date(log.date)) : "—"}</td>
+                      <td className="health-berat-print-weight-cell">{log?.next_due_date ? formatDateShort(new Date(log.next_due_date)) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "vaksin" && (
+        <div id="health-vaksin-print" className="hidden print:block health-preventive-print" aria-hidden>
+          <div className="health-berat-print-inner">
+            <h1 className="health-berat-print-title">Laporan Vaksin</h1>
+            <p className="health-berat-print-date">
+              Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </p>
+            <p className="health-berat-print-sort">Data diurutkan berdasarkan: <strong>{getSortLabel(sortBy, order)}</strong></p>
+            <table className="health-berat-print-table">
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Nama Kucing</th>
+                  <th>Ras | Umur</th>
+                  <th>Status</th>
+                  <th>Jenis vaksin</th>
+                  <th>Last</th>
+                  <th>Next due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => {
+                  const { status } = getPreventiveStatus(row.lastVaccineLog?.next_due_date ?? null);
+                  const log = row.lastVaccineLog;
+                  const { label: vaxLabel } = getVaccineTypeCapsule(log?.title);
+                  return (
+                    <tr key={row.cat.id}>
+                      <td>{i + 1}</td>
+                      <td className="font-medium">{row.cat.name ?? row.cat.cat_id ?? "—"}</td>
+                      <td>{row.cat.breed_id && breedsById.get(row.cat.breed_id)?.name ? breedsById.get(row.cat.breed_id)!.name : "—"} | {formatAge(row.cat.dob)}</td>
+                      <td className={cn("health-print-preventive-status", status === "Terlambat" && "health-print-preventive-status--overdue", status === "Aman" && "health-print-preventive-status--ok", status === "—" && "health-print-preventive-status--none")}>{status}</td>
+                      <td className={cn("health-print-vaksin-type", log?.title?.trim().toUpperCase() === "F3" && "health-print-vaksin-type--f3", log?.title?.trim().toUpperCase() === "F4" && "health-print-vaksin-type--f4", log?.title?.trim().toUpperCase() === "RABIES" && "health-print-vaksin-type--rabies")}>{vaxLabel}</td>
+                      <td className="health-berat-print-weight-cell">{log ? formatDateShort(new Date(log.date)) : "—"}</td>
+                      <td className="health-berat-print-weight-cell">{log?.next_due_date ? formatDateShort(new Date(log.next_due_date)) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "dirawat" && (() => {
+        const dirawatRows = rows.filter(
+          (row) =>
+            row.suggestion.reasons.some((r) => r.includes("Sedang dalam perawatan aktif")) ||
+            row.cat.status === "sakit" ||
+            row.cat.status === "memburuk",
+        );
+        return (
+          <div id="health-dirawat-print" className="hidden print:block health-preventive-print" aria-hidden>
+            <div className="health-berat-print-inner">
+              <h1 className="health-berat-print-title">Laporan Dirawat</h1>
+              <p className="health-berat-print-date">
+                Dicetak pada: {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              </p>
+              <table className="health-berat-print-table">
+                <thead>
+                  <tr>
+                    <th>No.</th>
+                    <th>Nama Kucing</th>
+                    <th>Ras | Umur</th>
+                    <th>Status</th>
+                    <th>Lokasi</th>
+                    <th>Menular</th>
+                    <th>Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dirawatRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-4 text-muted-foreground">Tidak ada kucing yang sedang dalam perawatan.</td>
+                    </tr>
+                  ) : (
+                    dirawatRows.map((row, i) => {
+                      const dirawatStatusList = Array.isArray(row.cat.dirawat_status) ? row.cat.dirawat_status : [];
+                      const statusPrint = dirawatStatusList.length > 0
+                        ? dirawatStatusList.map((key) => DIRAWAT_STATUS_LABELS[key as keyof typeof DIRAWAT_STATUS_LABELS] ?? key).join(", ")
+                        : "—";
+                      const lokasi = row.cat.location === "rumah" ? "Rumah" : row.cat.location === "toko" ? "Toko" : row.cat.location === "klinik" ? "Klinik" : "—";
+                      const menular = row.cat.is_contagious === true ? "Ya" : row.cat.is_contagious === false ? "Tidak" : "—";
+                      const keterangan = row.cat.treatment_notes?.trim() || "—";
+                      return (
+                        <tr key={row.cat.id}>
+                          <td>{i + 1}</td>
+                          <td className="font-medium">{row.cat.name ?? row.cat.cat_id ?? "—"}</td>
+                          <td>{row.cat.breed_id && breedsById.get(row.cat.breed_id)?.name ? breedsById.get(row.cat.breed_id)!.name : "—"} | {formatAge(row.cat.dob)}</td>
+                          <td>{statusPrint}</td>
+                          <td className={cn("health-print-dirawat-lokasi", row.cat.location === "rumah" && "health-print-dirawat-lokasi--rumah", row.cat.location === "toko" && "health-print-dirawat-lokasi--toko", row.cat.location === "klinik" && "health-print-dirawat-lokasi--klinik")}>{lokasi}</td>
+                          <td>{menular}</td>
+                          <td>{keterangan}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

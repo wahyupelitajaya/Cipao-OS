@@ -6,13 +6,14 @@ import { useFormStatus } from "react-dom";
 import type { Tables } from "@/lib/types";
 import { updateCatWithState } from "@/app/actions/cats";
 import { Button } from "@/components/ui/button";
-import { CAT_STATUSES, CAT_LOCATIONS, CAT_STATUS_LABELS, CAT_LOCATION_LABELS } from "@/lib/constants";
+import { CAT_STATUSES, CAT_LOCATIONS, CAT_STATUS_LABELS, CAT_LOCATION_LABELS, DIRAWAT_STATUSES, DIRAWAT_STATUS_LABELS } from "@/lib/constants";
 
 type Cat = Tables<"cats">;
 type Breed = Tables<"cat_breeds">;
 
 const STATUS_OPTIONS = CAT_STATUSES.map((value) => ({ value, label: CAT_STATUS_LABELS[value] }));
 const LOCATION_OPTIONS = CAT_LOCATIONS.map((value) => ({ value, label: CAT_LOCATION_LABELS[value] }));
+const DIRAWAT_STATUS_OPTIONS = DIRAWAT_STATUSES.map((value) => ({ value, label: DIRAWAT_STATUS_LABELS[value] }));
 
 const selectClass =
   "flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
@@ -59,9 +60,32 @@ export function EditCatDirawatForm({ cat, breeds, onSuccess }: EditCatDirawatFor
       <input type="hidden" name="name" value={cat.name} />
       <input type="hidden" name="dob" value={formatDateForInput(cat.dob)} />
       <input type="hidden" name="photo_url" value={cat.photo_url ?? ""} />
+      <input type="hidden" name="dirawat_status_sent" value="1" />
       <div className="space-y-1">
         <label className="text-xs font-medium text-muted-foreground">
-          Status
+          Status (bisa pilih lebih dari satu)
+        </label>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-xl border border-input bg-muted/30 p-3">
+          {DIRAWAT_STATUS_OPTIONS.map((o) => {
+            const checked = Array.isArray(cat.dirawat_status) && cat.dirawat_status.includes(o.value);
+            return (
+              <label key={o.value} className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="dirawat_status"
+                  value={o.value}
+                  defaultChecked={checked}
+                  className="h-4 w-4 rounded border-input"
+                />
+                {o.label}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-muted-foreground">
+          Status umum
         </label>
         <select
           name="status"
