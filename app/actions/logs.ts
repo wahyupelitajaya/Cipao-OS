@@ -279,6 +279,30 @@ export async function updateGroomingLog(formData: FormData) {
   revalidateGrooming();
 }
 
+export async function deleteGroomingLog(formData: FormData) {
+  await requireAdminOrGroomer();
+
+  const id = getString(formData, "id", { required: true });
+
+  const supabase = await createSupabaseServerClient();
+  const { data: log, error: fetchError } = await supabase
+    .from("grooming_logs")
+    .select("cat_id")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !log) {
+    throw new AppError(ErrorCode.NOT_FOUND, "Log grooming tidak ditemukan.");
+  }
+
+  const { error } = await supabase.from("grooming_logs").delete().eq("id", id);
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+
+  revalidateCat(log.cat_id);
+  revalidateGrooming();
+}
+
 interface BulkGroomingItem {
   catId: string;
   logId: string | null;
@@ -338,6 +362,52 @@ export async function bulkSetGroomingDate(formData: FormData) {
   for (const { catId } of payload.items) {
     revalidateCat(catId);
   }
+}
+
+/** Payload: { catIds: string[], which: "latest" | "oldest" } */
+function isBulkDeleteGroomingPayload(
+  v: unknown
+): v is { catIds: string[]; which: "latest" | "oldest" } {
+  if (v == null || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  if (!Array.isArray(o.catIds) || o.catIds.length === 0 || o.catIds.length > BULK_MAX_IDS)
+    return false;
+  if (o.catIds.some((id) => typeof id !== "string")) return false;
+  return o.which === "latest" || o.which === "oldest";
+}
+
+export async function bulkDeleteGroomingLogs(formData: FormData) {
+  await requireAdminOrGroomer();
+
+  const payload = getJson<unknown>(formData, "payload");
+  if (!isBulkDeleteGroomingPayload(payload)) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "Format payload tidak valid. Diperlukan payload dengan catIds dan which (latest|oldest)."
+    );
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const orderDesc = payload.which === "latest";
+
+  for (const catId of payload.catIds) {
+    const { data: log, error: fetchError } = await supabase
+      .from("grooming_logs")
+      .select("id")
+      .eq("cat_id", catId)
+      .order("date", { ascending: !orderDesc })
+      .limit(1)
+      .maybeSingle();
+
+    if (fetchError) throw new AppError(ErrorCode.DB_ERROR, fetchError.message, fetchError);
+    if (!log) continue;
+
+    const { error } = await supabase.from("grooming_logs").delete().eq("id", log.id);
+    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+    revalidateCat(catId);
+  }
+
+  revalidateGrooming();
 }
 
 export async function updateHealthLogDate(formData: FormData) {

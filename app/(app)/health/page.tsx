@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
 import { getSessionProfile, isAdmin } from "@/lib/auth";
-import { getHealthScanData, type HealthSortBy, type HealthSortOrder } from "@/lib/data/health";
+import { getHealthScanData, type HealthSortBy, type HealthSortOrder, type HealthTab } from "@/lib/data/health";
 import { HealthTable } from "@/components/health/health-table";
 import { HealthSortSelect } from "@/components/health/health-sort-select";
 import { HealthSearchForm } from "@/components/health/health-search-form";
@@ -9,7 +9,7 @@ import type { Tables } from "@/lib/types";
 
 type Breed = Tables<"cat_breeds">;
 
-const SORT_BY_OPTIONS = ["name", "cat_id", "dob"] as const;
+const SORT_BY_OPTIONS: HealthSortBy[] = ["name", "cat_id", "dob", "weight", "weight_status", "preventive_status", "next_due", "cat_status"];
 const ORDER_OPTIONS = ["asc", "desc"] as const;
 
 const VALID_TABS = ["berat", "obatCacing", "obatKutu", "vaksin", "dirawat"] as const;
@@ -18,9 +18,26 @@ interface HealthPageProps {
   searchParams?: Promise<{ q?: string; sortBy?: string; order?: string; tab?: string }>;
 }
 
-function parseSort(search: { sortBy?: string; order?: string }): { sortBy: HealthSortBy; order: HealthSortOrder } {
-  const sortBy = SORT_BY_OPTIONS.includes((search.sortBy as HealthSortBy) ?? "") ? (search.sortBy as HealthSortBy) : "name";
-  const order = ORDER_OPTIONS.includes((search.order as HealthSortOrder) ?? "") ? (search.order as HealthSortOrder) : "asc";
+const DEFAULT_SORT_BY_TAB: Record<HealthTab, { sortBy: HealthSortBy; order: HealthSortOrder }> = {
+  berat: { sortBy: "weight", order: "asc" },
+  obatCacing: { sortBy: "preventive_status", order: "asc" },
+  obatKutu: { sortBy: "preventive_status", order: "asc" },
+  vaksin: { sortBy: "preventive_status", order: "asc" },
+  dirawat: { sortBy: "cat_status", order: "asc" },
+};
+
+const SORT_BY_VALID_PER_TAB: Record<HealthTab, HealthSortBy[]> = {
+  berat: ["name", "cat_id", "dob", "weight", "weight_status"],
+  obatCacing: ["name", "cat_id", "dob", "preventive_status", "next_due"],
+  obatKutu: ["name", "cat_id", "dob", "preventive_status", "next_due"],
+  vaksin: ["name", "cat_id", "dob", "preventive_status", "next_due"],
+  dirawat: ["name", "cat_id", "dob", "cat_status"],
+};
+
+function parseSort(search: { sortBy?: string; order?: string }, tab: HealthTab): { sortBy: HealthSortBy; order: HealthSortOrder } {
+  const allowed = SORT_BY_VALID_PER_TAB[tab];
+  const sortBy = search.sortBy && allowed.includes(search.sortBy as HealthSortBy) ? (search.sortBy as HealthSortBy) : DEFAULT_SORT_BY_TAB[tab].sortBy;
+  const order = ORDER_OPTIONS.includes((search.order as HealthSortOrder) ?? "") ? (search.order as HealthSortOrder) : DEFAULT_SORT_BY_TAB[tab].order;
   return { sortBy, order };
 }
 
@@ -28,18 +45,18 @@ export default async function HealthPage(props: HealthPageProps) {
   const search = (await props.searchParams) ?? {};
   const q = (search.q ?? "").trim();
   const tabParam = search.tab;
-  const initialTab =
+  const initialTab: HealthTab =
     tabParam && VALID_TABS.includes(tabParam as (typeof VALID_TABS)[number])
-      ? (tabParam as (typeof VALID_TABS)[number])
+      ? (tabParam as HealthTab)
       : "berat";
-  const { sortBy, order } = parseSort(search);
+  const { sortBy, order } = parseSort(search, initialTab);
 
   const supabase = await createSupabaseServerClient();
   const { profile } = await getSessionProfile();
   const admin = isAdmin(profile);
 
   const [rows, { data: breeds = [] }] = await Promise.all([
-    getHealthScanData(supabase, { q: q || undefined, sortBy, order }),
+    getHealthScanData(supabase, { q: q || undefined, sortBy, order, tab: initialTab }),
     supabase
       .from("cat_breeds")
       .select("*")

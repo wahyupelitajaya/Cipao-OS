@@ -52,13 +52,50 @@ function toPreventiveLogRow(r: LatestPreventiveRow): PreventiveLogRow {
   return { id: r.id, date: r.date, next_due_date: r.next_due_date ?? null, title: r.title ?? "" };
 }
 
-export type HealthSortBy = "name" | "cat_id" | "dob";
+export type HealthSortBy =
+  | "name"
+  | "cat_id"
+  | "dob"
+  | "weight"
+  | "weight_status"
+  | "preventive_status"
+  | "next_due"
+  | "cat_status";
 export type HealthSortOrder = "asc" | "desc";
+
+export type HealthTab = "berat" | "obatCacing" | "obatKutu" | "vaksin" | "dirawat";
 
 export interface GetHealthScanDataOptions {
   q?: string;
   sortBy?: HealthSortBy;
   order?: HealthSortOrder;
+  tab?: HealthTab;
+}
+
+/** Weight trend for sort: turun=0, sama=1, naik=2 */
+function getWeightTrend(row: HealthScanRow): number {
+  const curr = row.suggestion.lastWeight?.weightKg ?? null;
+  const prev = row.previousWeight?.weightKg ?? null;
+  if (curr == null || prev == null) return 1;
+  if (curr < prev) return 0; // turun
+  if (curr > prev) return 2; // naik
+  return 1; // sama
+}
+
+/** Preventive status for sort: Terlambat=0, Aman=1, —=2 */
+function getPreventiveStatusOrder(nextDue: string | null | undefined): number {
+  if (nextDue == null || String(nextDue).trim() === "") return 2;
+  const due = new Date(String(nextDue).trim()).getTime();
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  if (due < start) return 0; // Terlambat
+  return 1; // Aman
+}
+
+/** Cat status for dirawat: sakit/memburuk first = 0, else 1 */
+function getCatStatusOrder(status: string | null | undefined): number {
+  if (status === "sakit" || status === "memburuk") return 0;
+  return 1;
 }
 
 /**
@@ -67,8 +104,9 @@ export interface GetHealthScanDataOptions {
  * - Last 2 weight logs per cat via view
  * - Active treatment flag via small cat_id-only query
  * @param options.q Optional search string: filter cats by name or cat_id (case-insensitive)
- * @param options.sortBy Sort by name, cat_id, or dob
+ * @param options.sortBy Sort by name, cat_id, dob, weight, weight_status, preventive_status, next_due, cat_status
  * @param options.order asc or desc
+ * @param options.tab Tab aktif untuk sort preventive (obatCacing, obatKutu, vaksin) dan dirawat
  */
 export async function getHealthScanData(
   supabase: SupabaseClient,
@@ -77,6 +115,7 @@ export async function getHealthScanData(
   const q = options?.q;
   const sortBy = options?.sortBy ?? "name";
   const order = options?.order ?? "asc";
+  const tab = options?.tab ?? "berat";
 
   let catsQuery = supabase
     .from("cats")
@@ -132,28 +171,10 @@ export async function getHealthScanData(
     });
   })();
 
-  const catsSorted = [...(cats as Cat[])].sort((a, b) => {
-    let cmp = 0;
-    if (sortBy === "name") {
-      const na = (a.name ?? "").toLowerCase();
-      const nb = (b.name ?? "").toLowerCase();
-      cmp = na.localeCompare(nb);
-    } else if (sortBy === "cat_id") {
-      const ca = (a.cat_id ?? "").toLowerCase();
-      const cb = (b.cat_id ?? "").toLowerCase();
-      cmp = ca.localeCompare(cb);
-    } else {
-      // dob: null last, then compare dates
-      const da = a.dob ? new Date(a.dob).getTime() : Infinity;
-      const db = b.dob ? new Date(b.dob).getTime() : Infinity;
-      if (da !== db) cmp = da < db ? -1 : 1;
-    }
-    return order === "asc" ? cmp : -cmp;
-  });
-
+  const catsOrdered = [...(cats as Cat[])];
   const normalizeId = (id: string | null | undefined) => String(id ?? "").toLowerCase();
   const preventiveByCat = new Map<string, LatestPreventiveRow[]>();
-  catsSorted.forEach((c) => preventiveByCat.set(normalizeId(c.id), []));
+  catsOrdered.forEach((c) => preventiveByCat.set(normalizeId(c.id), []));
   (preventiveRows as LatestPreventiveRow[]).forEach((r) => {
     const key = normalizeId(r.cat_id);
     const arr = preventiveByCat.get(key);
@@ -165,13 +186,13 @@ export async function getHealthScanData(
   );
 
   const weightsByCat = new Map<string, WeightLog[]>();
-  catsSorted.forEach((c) => weightsByCat.set(c.id, []));
+  catsOrdered.forEach((c) => weightsByCat.set(c.id, []));
   (weightRows as LatestWeightRow[]).forEach((r) => {
     const arr = weightsByCat.get(r.cat_id);
     if (arr) arr.push(r as unknown as WeightLog);
   });
 
-  return catsSorted.map((cat) => {
+  const rows: HealthScanRow[] = catsOrdered.map((cat) => {
     const preventive = preventiveByCat.get(normalizeId(cat.id)) ?? [];
     const healthForSuggestion: HealthLog[] = preventive.map((r) => ({
       ...r,
@@ -224,4 +245,41 @@ export async function getHealthScanData(
       lastDewormLog: byType.has("DEWORM") ? toPreventiveLogRow(byType.get("DEWORM")!) : null,
     };
   });
+
+  const mult = order === "asc" ? 1 : -1;
+  rows.sort((a, b) => {
+    let cmp = 0;
+    if (sortBy === "name") {
+      cmp = (a.cat.name ?? "").toLowerCase().localeCompare((b.cat.name ?? "").toLowerCase());
+    } else if (sortBy === "cat_id") {
+      cmp = (a.cat.cat_id ?? "").localeCompare(b.cat.cat_id ?? "");
+    } else if (sortBy === "dob") {
+      const da = a.cat.dob ? new Date(a.cat.dob).getTime() : Infinity;
+      const db = b.cat.dob ? new Date(b.cat.dob).getTime() : Infinity;
+      cmp = da === db ? 0 : da < db ? -1 : 1;
+    } else if (sortBy === "weight") {
+      const wa = a.suggestion.lastWeight?.weightKg ?? 0;
+      const wb = b.suggestion.lastWeight?.weightKg ?? 0;
+      cmp = wa === wb ? 0 : wa < wb ? -1 : 1;
+    } else if (sortBy === "weight_status") {
+      cmp = getWeightTrend(a) - getWeightTrend(b);
+    } else if (sortBy === "preventive_status" && (tab === "obatCacing" || tab === "obatKutu" || tab === "vaksin")) {
+      const logA = tab === "vaksin" ? a.lastVaccineLog : tab === "obatKutu" ? a.lastFleaLog : a.lastDewormLog;
+      const logB = tab === "vaksin" ? b.lastVaccineLog : tab === "obatKutu" ? b.lastFleaLog : b.lastDewormLog;
+      cmp = getPreventiveStatusOrder(logA?.next_due_date ?? null) - getPreventiveStatusOrder(logB?.next_due_date ?? null);
+    } else if (sortBy === "next_due" && (tab === "obatCacing" || tab === "obatKutu" || tab === "vaksin")) {
+      const logA = tab === "vaksin" ? a.lastVaccineLog : tab === "obatKutu" ? a.lastFleaLog : a.lastDewormLog;
+      const logB = tab === "vaksin" ? b.lastVaccineLog : tab === "obatKutu" ? b.lastFleaLog : b.lastDewormLog;
+      const dueA = logA?.next_due_date ? new Date(logA.next_due_date).getTime() : Infinity;
+      const dueB = logB?.next_due_date ? new Date(logB.next_due_date).getTime() : Infinity;
+      cmp = dueA === dueB ? 0 : dueA < dueB ? -1 : 1;
+    } else if (sortBy === "cat_status" && tab === "dirawat") {
+      cmp = getCatStatusOrder(a.cat.status) - getCatStatusOrder(b.cat.status);
+    } else {
+      cmp = (a.cat.name ?? "").toLowerCase().localeCompare((b.cat.name ?? "").toLowerCase());
+    }
+    return mult * cmp;
+  });
+
+  return rows;
 }

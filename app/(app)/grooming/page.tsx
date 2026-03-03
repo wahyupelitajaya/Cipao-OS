@@ -32,11 +32,11 @@ export default async function GroomingPage(props: GroomingPageProps) {
 
   const [
     { data: cats = [] },
-    { data: latestGroomingRows = [] },
+    { data: latest2GroomingRows = [] },
     { data: breeds = [] },
   ] = await Promise.all([
     supabase.from("cats").select("*").eq("is_active", true),
-    supabase.from("latest_grooming_per_cat").select("id, cat_id, date, created_at"),
+    supabase.from("latest_2_grooming_per_cat").select("id, cat_id, date, created_at").order("cat_id").order("date", { ascending: false }),
     supabase
       .from("cat_breeds")
       .select("*")
@@ -44,21 +44,19 @@ export default async function GroomingPage(props: GroomingPageProps) {
       .order("name", { ascending: true }),
   ]);
 
-  const lastByCat = new Map<string, GroomingLog | null>();
-  (latestGroomingRows as { id: string; cat_id: string; date: string; created_at: string }[]).forEach(
-    (row) => {
-      lastByCat.set(row.cat_id, {
-        id: row.id,
-        cat_id: row.cat_id,
-        date: row.date,
-        created_at: row.created_at,
-      } as GroomingLog);
-    }
-  );
+  type GroomingRowFromView = { id: string; cat_id: string; date: string; created_at: string };
+  const logsByCat = new Map<string, GroomingLog[]>();
+  (latest2GroomingRows as GroomingRowFromView[]).forEach((row) => {
+    const list = logsByCat.get(row.cat_id) ?? [];
+    list.push({ id: row.id, cat_id: row.cat_id, date: row.date, created_at: row.created_at } as GroomingLog);
+    logsByCat.set(row.cat_id, list);
+  });
 
   const rows = (cats as Cat[]).map((cat) => {
-    const last = lastByCat.get(cat.id) ?? null;
-    return { cat, last };
+    const logs = logsByCat.get(cat.id) ?? [];
+    const last = logs[0] ?? null;
+    const previous = logs[1] ?? null;
+    return { cat, last, previous };
   });
 
   rows.sort((a, b) => {
