@@ -600,10 +600,30 @@ export async function POST(req: NextRequest) {
             }
 
             // 7) Default: pesan biasa → simpan ke daily_activities seperti sebelumnya.
+            // Kumpulkan semua waktu & lokasi yang disebut di pesan (bisa lebih dari satu).
+            const textLower = text.toLowerCase();
+            const timeMatches = Array.from(textLower.matchAll(/\b(pagi|siang|sore|malam)\b/g)).map((m) => m[1]);
+            const uniqueTimeSlots = Array.from(
+              new Set(
+                timeMatches.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()),
+              ),
+            );
+            const locationMatches = Array.from(textLower.matchAll(/\b(rumah|toko)\b/g)).map((m) => m[1]);
+            const uniqueLocations = Array.from(
+              new Set(
+                locationMatches.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()),
+              ),
+            );
+
+            const timeSlotsArray =
+              uniqueTimeSlots.length > 0 ? uniqueTimeSlots : [parsed.timeSlot];
+            const locationsArray =
+              uniqueLocations.length > 0 ? uniqueLocations : [parsed.location];
+
             const row = {
               date: activityDate,
-              time_slots: [parsed.timeSlot],
-              locations: [parsed.location],
+              time_slots: timeSlotsArray,
+              locations: locationsArray,
               categories: [],
               cat_ids: [],
               note,

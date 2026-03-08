@@ -65,11 +65,28 @@ export async function processWhatsAppInbox(): Promise<{
     const parsed = parseWhatsAppActivityMessage(text);
     const activityDate = parsed.date ?? defaultToday;
     const note = `[WhatsApp] ${row.from_number}: ${parsed.note || text}`;
+    const textLower = text.toLowerCase();
+    const timeMatches = Array.from(textLower.matchAll(/\b(pagi|siang|sore|malam)\b/g)).map((m) => m[1]);
+    const uniqueTimeSlots = Array.from(
+      new Set(
+        timeMatches.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()),
+      ),
+    );
+    const locationMatches = Array.from(textLower.matchAll(/\b(rumah|toko)\b/g)).map((m) => m[1]);
+    const uniqueLocations = Array.from(
+      new Set(
+        locationMatches.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()),
+      ),
+    );
+    const timeSlotsArray =
+      uniqueTimeSlots.length > 0 ? uniqueTimeSlots : [parsed.timeSlot];
+    const locationsArray =
+      uniqueLocations.length > 0 ? uniqueLocations : [parsed.location];
 
     const activityRow = {
       date: activityDate,
-      time_slots: [parsed.timeSlot],
-      locations: [parsed.location],
+      time_slots: timeSlotsArray,
+      locations: locationsArray,
       categories: [],
       cat_ids: [],
       note,
