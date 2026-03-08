@@ -1,8 +1,9 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
-import { requireAdmin } from "@/lib/auth";
+import { getSessionProfile, requireAdmin } from "@/lib/auth";
 import { getActivityLogs } from "@/lib/data/activity-log";
+import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 /** Fetch activity logs for the Log page. Admin only. Opsional q, sortBy, sortOrder. */
 export async function getActivityLogsForPage(
@@ -42,3 +43,45 @@ export async function appendActivityLog(payload: AppendActivityLogPayload): Prom
     // Jangan throw agar aksi utama (e.g. update cat) tetap sukses
   }
 }
+
+export interface PageViewPayload {
+  path: string;
+  userAgent: string;
+  timezone?: string;
+}
+
+/** Log satu page view (digunakan dari client). Mencatat user, perangkat, lokasi (timezone), dan waktu. */
+export async function logPageView(payload: PageViewPayload): Promise<void> {
+  const { session, profile } = await getSessionProfile();
+  if (!session) return;
+
+  const ua = payload.userAgent ?? "";
+  const uaLower = ua.toLowerCase();
+  let device: "Desktop" | "Mobile" | "Tablet" = "Desktop";
+  if (uaLower.includes("ipad") || uaLower.includes("tablet")) device = "Tablet";
+  else if (
+    uaLower.includes("mobi") ||
+    uaLower.includes("android") ||
+    uaLower.includes("iphone")
+  ) {
+    device = "Mobile";
+  }
+
+  const location =
+    payload.timezone && payload.timezone.trim()
+      ? `Zona: ${payload.timezone.trim()}`
+      : "Zona: tidak diketahui";
+
+  const supabaseAdmin = createSupabaseAdminClient();
+  const { error } = await supabaseAdmin.from("activity_log").insert({
+    user_id: session.user.id,
+    action: "view",
+    entity_type: "page_view",
+    entity_id: payload.path,
+    summary: `View ${payload.path} oleh ${profile?.email ?? session.user.id} (${device}, ${location})`,
+  });
+  if (error) {
+    console.error("activity_log page_view insert failed:", error);
+  }
+}
+

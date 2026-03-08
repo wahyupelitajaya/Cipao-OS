@@ -9,6 +9,7 @@ import { getSessionProfile, isAdmin } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
 import { getSearchData } from "@/lib/data/search";
 import type { SearchData } from "@/lib/data/search";
+import { PageViewLogger } from "@/components/layout/page-view-logger";
 
 export type { SearchData };
 
@@ -98,6 +99,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
 
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <div className="container-app mx-auto">
+            <PageViewLogger />
             {children}
           </div>
         </main>
