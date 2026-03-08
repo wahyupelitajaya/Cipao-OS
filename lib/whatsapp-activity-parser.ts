@@ -143,22 +143,29 @@ export function parseWhatsAppActivityMessage(text: string): ParsedWhatsAppActivi
   let timeSlot: string | null = null;
   let location: string | null = null;
 
-  const timeMatch = rest.match(/^(pagi|siang|sore|malam)(?:\s|$)/i);
-  if (timeMatch) {
-    const word = timeMatch[1].charAt(0).toUpperCase() + timeMatch[1].slice(1).toLowerCase();
-    if (TIME_SLOTS.includes(word as (typeof TIME_SLOTS)[number])) {
-      timeSlot = word;
-      rest = rest.slice(timeMatch[0].length).trim();
+  // Di awal baris setelah tanggal, boleh ada beberapa token waktu & lokasi berurutan,
+  // misalnya: "Siang Sore Malam Rumah: ...". Kita buang semuanya dari deskripsi.
+  while (true) {
+    const timeMatch = rest.match(/^(pagi|siang|sore|malam)(?:\s+|$)/i);
+    if (timeMatch) {
+      const word = timeMatch[1].charAt(0).toUpperCase() + timeMatch[1].slice(1).toLowerCase();
+      if (TIME_SLOTS.includes(word as (typeof TIME_SLOTS)[number])) {
+        timeSlot = timeSlot ?? word;
+        rest = rest.slice(timeMatch[0].length).trim();
+        continue;
+      }
     }
-  }
 
-  const locMatch = rest.match(/^(rumah|toko)(?:\s|$|:)/i);
-  if (locMatch) {
-    const word = locMatch[1].charAt(0).toUpperCase() + locMatch[1].slice(1).toLowerCase();
-    if (LOCATIONS.includes(word as (typeof LOCATIONS)[number])) {
-      location = word;
-      rest = rest.slice(locMatch[0].length).trim();
+    const locMatch = rest.match(/^(rumah|toko)(?:\s+|$|:)/i);
+    if (locMatch) {
+      const word = locMatch[1].charAt(0).toUpperCase() + locMatch[1].slice(1).toLowerCase();
+      if (LOCATIONS.includes(word as (typeof LOCATIONS)[number])) {
+        location = location ?? word;
+        rest = rest.slice(locMatch[0].length).trim();
+        continue;
+      }
     }
+    break;
   }
 
   // Fallback: jika waktu/lokasi tidak di awal baris (mis. format WA beda), cari di seluruh isi pesan.
