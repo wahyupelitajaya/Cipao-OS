@@ -3,8 +3,13 @@
  */
 
 // --- Cat ---
-export const CAT_STATUSES = ["sehat", "membaik", "memburuk", "hampir_sembuh", "observasi", "sakit"] as const;
+export const CAT_STATUSES = ["sehat", "membaik", "memburuk", "hampir_sembuh", "observasi", "sakit", "meninggal"] as const;
 export type CatStatus = (typeof CAT_STATUSES)[number];
+
+/** Kucing dengan status meninggal dianggap tidak aktif (disembunyikan dari dashboard, health scan, dll.). */
+export function isCatStatusActive(status: CatStatus | null | undefined): boolean {
+  return status !== "meninggal";
+}
 
 export const CAT_LOCATIONS = ["rumah", "toko", "klinik"] as const;
 export type CatLocation = (typeof CAT_LOCATIONS)[number];
@@ -16,6 +21,7 @@ export const CAT_STATUS_LABELS: Record<CatStatus, string> = {
   hampir_sembuh: "Hampir Sembuh",
   observasi: "Observasi",
   sakit: "Sakit",
+  meninggal: "Meninggal",
 };
 
 export const CAT_LOCATION_LABELS: Record<CatLocation, string> = {

@@ -24,7 +24,7 @@ export type Database = {
           name: string;
           owner_id: string;
           dob: string | null;
-          status: "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit" | null;
+          status: "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit" | "meninggal" | null;
           location: "rumah" | "toko" | "klinik" | null;
           status_manual: string | null;
           is_active: boolean;

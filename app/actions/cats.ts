@@ -18,14 +18,21 @@ import { toISODateString } from "@/lib/dates";
 import {
   CAT_STATUSES,
   CAT_LOCATIONS,
+  CAT_STATUS_LABELS,
   PHOTO_BUCKET,
   PHOTO_MAX_BYTES,
   PHOTO_ALLOWED_MIME_TYPES,
+  isCatStatusActive,
 } from "@/lib/constants";
 import { appendActivityLog } from "@/app/actions/activity-log";
 
 const DEFAULT_STATUS = "observasi";
 const DEFAULT_LOCATION = "rumah";
+
+const STATUS_ERROR =
+  "Status harus salah satu: " +
+  CAT_STATUSES.map((s) => CAT_STATUS_LABELS[s]).join(", ") +
+  ".";
 
 export async function createCat(formData: FormData) {
   await requireAdmin();
@@ -37,7 +44,7 @@ export async function createCat(formData: FormData) {
   const locationRaw = getOptionalString(formData, "location");
 
   if (statusRaw && !validateCatStatus(statusRaw)) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Sehat, Membaik, Memburuk, Hampir Sembuh, Observasi, Sakit.");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, STATUS_ERROR);
   }
   if (locationRaw && !validateCatLocation(locationRaw)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Lokasi harus salah satu: Rumah, Toko, Klinik.");
@@ -72,6 +79,7 @@ export async function createCat(formData: FormData) {
     dob,
     status,
     location,
+    is_active: isCatStatusActive(status),
   });
 
   if (insertError) {
@@ -140,7 +148,7 @@ export async function updateCat(formData: FormData) {
   const photoUrlRaw = getOptionalString(formData, "photo_url");
 
   if (statusRaw && !validateCatStatus(statusRaw)) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Sehat, Membaik, Memburuk, Hampir Sembuh, Observasi, Sakit.");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, STATUS_ERROR);
   }
   if (locationRaw && !validateCatLocation(locationRaw)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Lokasi harus salah satu: Rumah, Toko, Klinik.");
@@ -189,13 +197,16 @@ export async function updateCat(formData: FormData) {
 
   const breedId = breedIdRaw && breedIdRaw.trim() ? breedIdRaw.trim() : null;
 
+  const resolvedStatus =
+    statusRaw && validateCatStatus(statusRaw) ? statusRaw : DEFAULT_STATUS;
   const updates: Record<string, unknown> = {
     name,
     dob,
-    status: statusRaw && validateCatStatus(statusRaw) ? statusRaw : DEFAULT_STATUS,
+    status: resolvedStatus,
     location: locationRaw && validateCatLocation(locationRaw) ? locationRaw : DEFAULT_LOCATION,
     breed_id: breedId,
     photo_url: photoUrl,
+    is_active: isCatStatusActive(resolvedStatus),
   };
   if (formData.has("treatment_notes")) {
     const notes = getOptionalString(formData, "treatment_notes")?.trim() || null;
@@ -260,7 +271,7 @@ export async function bulkUpdateCats(formData: FormData) {
   const hasDirawatStatus = formData.has("apply_dirawat_status");
 
   if (status && !validateCatStatus(status)) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Status harus salah satu: Sehat, Membaik, Memburuk, Hampir Sembuh, Observasi, Sakit.");
+    throw new AppError(ErrorCode.VALIDATION_ERROR, STATUS_ERROR);
   }
   if (location && !validateCatLocation(location)) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Lokasi harus salah satu: Rumah, Toko, Klinik.");
@@ -276,8 +287,19 @@ export async function bulkUpdateCats(formData: FormData) {
   const isContagious = isContagiousRaw === "true" ? true : isContagiousRaw === "false" ? false : null;
 
   const supabase = await createSupabaseServerClient();
-  const updates: { status?: string; location?: string; breed_id?: string | null; treatment_notes?: string | null; is_contagious?: boolean | null; dirawat_status?: string[] } = {};
-  if (status) updates.status = status;
+  const updates: {
+    status?: string;
+    location?: string;
+    breed_id?: string | null;
+    treatment_notes?: string | null;
+    is_contagious?: boolean | null;
+    dirawat_status?: string[];
+    is_active?: boolean;
+  } = {};
+  if (status) {
+    updates.status = status;
+    updates.is_active = isCatStatusActive(status);
+  }
   if (location) updates.location = location;
   if (breedId) updates.breed_id = breedId;
   if (treatmentNotesRaw !== undefined) updates.treatment_notes = treatmentNotes;

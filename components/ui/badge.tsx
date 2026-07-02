@@ -23,6 +23,9 @@ const badgeVariants = cva(
         observasi: "bg-slate-100 text-slate-700 border border-slate-200/80",
         memburuk: "bg-amber-100 text-amber-800 border border-amber-200/80",
         sakit: "bg-rose-100 text-rose-800 border border-rose-200/80",
+        /** Kucing sudah meninggal */
+        meninggal:
+          "bg-neutral-200/80 text-neutral-600 border border-neutral-300/80",
         /** Lokasi: Rumah — hijau lembut */
         location_rumah:
           "bg-[hsl(var(--status-bg-ok))] text-[hsl(var(--status-ok))] border border-[hsl(var(--status-ok)/0.2)]",

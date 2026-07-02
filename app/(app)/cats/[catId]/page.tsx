@@ -210,8 +210,8 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
             </h1>
             <Badge
               variant={
-                ["sehat", "membaik", "memburuk", "hampir_sembuh", "observasi", "sakit"].includes(c.status ?? "sehat")
-                  ? ((c.status ?? "sehat") as "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit")
+                ["sehat", "membaik", "memburuk", "hampir_sembuh", "observasi", "sakit", "meninggal"].includes(c.status ?? "sehat")
+                  ? ((c.status ?? "sehat") as "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit" | "meninggal")
                   : "sehat"
               }
             >

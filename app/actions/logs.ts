@@ -20,6 +20,35 @@ import { PREVENTIVE_TITLES, PREVENTIVE_INTERVALS } from "@/lib/constants";
 import type { PreventiveType } from "@/lib/constants";
 import { BULK_MAX_IDS } from "@/lib/constants";
 import { appendActivityLog } from "@/app/actions/activity-log";
+import { matchCatByToken, type CatMatchCandidate } from "@/lib/cat-name-match";
+import { WEIGHT_MAX_KG } from "@/lib/constants";
+
+export interface BulkImportWeightEntry {
+  name: string;
+  weightKg: number;
+  line?: number;
+}
+
+export interface BulkImportWeightResult {
+  applied: number;
+  notFound: { line?: number; name: string }[];
+  ambiguous: { line?: number; name: string; matches: string[] }[];
+  invalid: { line?: number; name: string; reason: string }[];
+  appliedCats: { name: string; weightKg: number }[];
+}
+
+function isBulkImportWeightPayload(v: unknown): v is BulkImportWeightEntry[] {
+  if (!Array.isArray(v) || v.length === 0) return false;
+  if (v.length > BULK_MAX_IDS) return false;
+  return v.every(
+    (item) =>
+      item != null &&
+      typeof item === "object" &&
+      typeof (item as BulkImportWeightEntry).name === "string" &&
+      typeof (item as BulkImportWeightEntry).weightKg === "number" &&
+      Number.isFinite((item as BulkImportWeightEntry).weightKg),
+  );
+}
 
 export async function addHealthLog(formData: FormData) {
   await requireAdmin();
@@ -181,6 +210,103 @@ export async function bulkAddWeightLog(formData: FormData) {
   for (const catId of catIds) {
     revalidateCat(catId);
   }
+}
+
+/** Impor berat badan dari daftar nama + berat (hasil parse file .txt). */
+export async function bulkImportWeightFromTxt(formData: FormData): Promise<BulkImportWeightResult> {
+  await requireAdmin();
+
+  const date = requireDate(formData, "date", "Tanggal");
+  const entries = getJson<unknown>(formData, "entries");
+
+  if (!isBulkImportWeightPayload(entries)) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "Format entri tidak valid. Diperlukan array nama dan berat.",
+    );
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: cats, error: catsError } = await supabase
+    .from("cats")
+    .select("id, name, cat_id")
+    .eq("is_active", true);
+
+  if (catsError) throw new AppError(ErrorCode.DB_ERROR, catsError.message, catsError);
+
+  const catList = (cats ?? []) as CatMatchCandidate[];
+  const result: BulkImportWeightResult = {
+    applied: 0,
+    notFound: [],
+    ambiguous: [],
+    invalid: [],
+    appliedCats: [],
+  };
+
+  /** catId → entri terakhir (jika nama sama muncul dua kali, yang terakhir menang) */
+  const toInsert = new Map<string, { name: string; weightKg: number }>();
+
+  for (const entry of entries) {
+    const name = entry.name.trim();
+    const weightKg = entry.weightKg;
+    const line = entry.line;
+
+    if (!name) {
+      result.invalid.push({ line, name, reason: "Nama kucing kosong." });
+      continue;
+    }
+    if (!Number.isFinite(weightKg) || weightKg <= 0 || weightKg > WEIGHT_MAX_KG) {
+      result.invalid.push({ line, name, reason: `Berat harus antara 0.01–${WEIGHT_MAX_KG} kg.` });
+      continue;
+    }
+
+    const match = matchCatByToken(catList, name);
+    if (match.status === "not_found") {
+      result.notFound.push({ line, name });
+      continue;
+    }
+    if (match.status === "ambiguous") {
+      result.ambiguous.push({
+        line,
+        name,
+        matches: match.matches.map((c) => c.name),
+      });
+      continue;
+    }
+
+    toInsert.set(match.cat.id, { name: match.cat.name, weightKg });
+  }
+
+  if (toInsert.size === 0) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "Tidak ada berat yang bisa diterapkan. Periksa nama kucing di file.",
+    );
+  }
+
+  for (const [catId, { name, weightKg }] of toInsert) {
+    const { error } = await supabase.from("weight_logs").insert({
+      cat_id: catId,
+      date,
+      weight_kg: weightKg,
+    });
+    if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+    result.applied += 1;
+    result.appliedCats.push({ name, weightKg });
+  }
+
+  revalidateHealth();
+  for (const catId of toInsert.keys()) {
+    revalidateCat(catId);
+  }
+
+  appendActivityLog({
+    action: "create",
+    entity_type: "weight_log",
+    summary: `Impor berat dari file .txt: ${result.applied} kucing (${date})`,
+  }).catch(() => {});
+
+  return result;
 }
 
 export async function updateWeightLog(formData: FormData) {

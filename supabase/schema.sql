@@ -84,7 +84,7 @@ create table if not exists public.cats (
   name text not null,
   owner_id uuid not null references public.profiles(id) on delete cascade,
   dob date,
-  status text check (status in ('sehat', 'membaik', 'memburuk', 'hampir_sembuh', 'observasi', 'sakit')),
+  status text check (status in ('sehat', 'membaik', 'memburuk', 'hampir_sembuh', 'observasi', 'sakit', 'meninggal')),
   location text check (location in ('rumah', 'toko', 'klinik')),
   status_manual text,
   is_active boolean not null default true,

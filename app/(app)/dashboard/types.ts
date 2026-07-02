@@ -1,4 +1,4 @@
-export type CatStatus = "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit" | null;
+export type CatStatus = "sehat" | "membaik" | "memburuk" | "hampir_sembuh" | "observasi" | "sakit" | "meninggal" | null;
 export type CatLocation = "rumah" | "toko" | "klinik" | null;
 
 export interface DashboardCatRecord {

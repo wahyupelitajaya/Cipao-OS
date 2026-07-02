@@ -18,7 +18,7 @@ type Cat = Tables<"cats">;
 type Breed = Tables<"cat_breeds">;
 
 const STATUS_OPTIONS = [
-  { value: "", label: "—" },
+  { value: "", label: "Status —" },
   ...CAT_STATUSES.map((value) => ({ value, label: CAT_STATUS_LABELS[value] })),
 ];
 
@@ -124,6 +124,13 @@ function StatusBadge({
   cat: { id: string; status: Cat["status"] };
   activeTreatmentCatIds?: Set<string>;
 }) {
+  if (cat.status === "meninggal") {
+    return (
+      <Badge variant="meninggal" className="font-medium">
+        Meninggal
+      </Badge>
+    );
+  }
   const inDirawat =
     activeTreatmentCatIds?.has(cat.id) ||
     cat.status === "sakit" ||
@@ -481,8 +488,17 @@ export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [], sor
             </thead>
             <tbody>
               {cats.map((cat, index) => {
-                const inDirawat = activeTreatmentSet.has(cat.id) || cat.status === "sakit" || cat.status === "memburuk";
-                const displayLabel = inDirawat ? "Sedang dirawat" : "Sehat";
+                const isMeninggal = cat.status === "meninggal";
+                const inDirawat =
+                  !isMeninggal &&
+                  (activeTreatmentSet.has(cat.id) ||
+                    cat.status === "sakit" ||
+                    cat.status === "memburuk");
+                const displayLabel = isMeninggal
+                  ? "Meninggal"
+                  : inDirawat
+                    ? "Sedang dirawat"
+                    : "Sehat";
                 return (
                   <tr key={cat.id}>
                     <td>{index + 1}</td>
@@ -492,7 +508,9 @@ export function CatsTable({ cats, breeds, admin, activeTreatmentCatIds = [], sor
                     <td>{formatAge(cat.dob)}</td>
                     <td className={cn(
                       "cats-print-status",
-                      inDirawat ? "cats-print-status--sakit" : "cats-print-status--sehat",
+                      isMeninggal && "cats-print-status--meninggal",
+                      !isMeninggal && inDirawat && "cats-print-status--sakit",
+                      !isMeninggal && !inDirawat && "cats-print-status--sehat",
                     )}>
                       {displayLabel}
                     </td>

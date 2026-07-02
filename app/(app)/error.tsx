@@ -5,6 +5,15 @@
  * Catches server-side exceptions (e.g. from Supabase rate limits, DB timeouts)
  * and shows a retry button instead of crashing the entire page.
  */
+function isSupabaseDnsError(message: string): boolean {
+    const normalized = message.toLowerCase();
+    return (
+        normalized.includes("fetch failed") &&
+        (normalized.includes("enotfound") || normalized.includes("getaddrinfo")) &&
+        normalized.includes("supabase.co")
+    );
+}
+
 export default function AppError({
     error,
     reset,
@@ -12,13 +21,17 @@ export default function AppError({
     error: Error & { digest?: string };
     reset: () => void;
 }) {
+    const supabaseDnsError = isSupabaseDnsError(error.message ?? "");
+
     return (
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
             <h2 className="text-lg font-semibold text-foreground">
-                Terjadi kesalahan
+                {supabaseDnsError ? "Koneksi database gagal" : "Terjadi kesalahan"}
             </h2>
             <p className="max-w-sm text-sm text-muted-foreground">
-                Gagal memuat halaman. Ini biasanya bersifat sementara — coba muat ulang.
+                {supabaseDnsError
+                    ? "Aplikasi tidak bisa terhubung ke Supabase. Cek nilai NEXT_PUBLIC_SUPABASE_URL di .env.local (hostname harus valid) lalu restart server."
+                    : "Gagal memuat halaman. Ini biasanya bersifat sementara — coba muat ulang."}
             </p>
             <button
                 onClick={reset}

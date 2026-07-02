@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { EditCatDirawatDialog } from "@/components/cats/edit-cat-dirawat-dialog";
 import { BulkEditDirawatDialog } from "@/components/cats/bulk-edit-dirawat-dialog";
+import { ImportWeightTxtDialog } from "@/components/health/import-weight-txt-dialog";
 import { Printer } from "lucide-react";
 import { parseLocalDateString } from "@/lib/dates";
 import { CAT_STATUS_LABELS, DIRAWAT_STATUS_LABELS } from "@/lib/constants";
@@ -176,6 +177,15 @@ function getPreventiveStatus(nextDue: string | null | undefined): { status: "Ter
 }
 
 /** Status berat: naik / turun / sama berdasarkan berat terbaru vs sebelumnya, plus jumlah kenaikan/turun (kg) */
+function filterDirawatRows(rows: HealthRow[]): HealthRow[] {
+  return rows.filter(
+    (row) =>
+      row.suggestion.reasons.some((r) => r.includes("Sedang dalam perawatan aktif")) ||
+      row.cat.status === "sakit" ||
+      row.cat.status === "memburuk",
+  );
+}
+
 function getWeightTrend(
   last: { weightKg?: number } | null | undefined,
   previous: { weightKg?: number } | null | undefined,
@@ -498,8 +508,21 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
     });
   }
 
-  const colSpanBerat = admin ? 5 : 4;
-  const colSpanPreventive = admin ? 6 : 5;
+  const colSpanBerat = 5;
+  const colSpanPreventive = 6;
+
+  function getSectionRows(section: SectionKey): HealthRow[] {
+    return section === "dirawat" ? filterDirawatRows(rows) : rows;
+  }
+
+  const activeSelection = getSelectedForSection(activeTab);
+  const printSelectionCount = activeSelection.size;
+  const printRows = getSectionRows(activeTab).filter((r) => activeSelection.has(r.cat.id));
+
+  function handlePrint() {
+    if (printSelectionCount === 0) return;
+    window.print();
+  }
 
   function CatCell({ cat }: { cat: Cat }) {
     return (
@@ -640,15 +663,22 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
             ))}
           </select>
         </div>
+        <span className="text-xs text-muted-foreground">
+          {printSelectionCount > 0
+            ? `${printSelectionCount} kucing dipilih untuk cetak`
+            : "Centang kucing di tabel sebelum cetak"}
+        </span>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => window.print()}
+          onClick={handlePrint}
+          disabled={printSelectionCount === 0}
           className="gap-2"
+          title={printSelectionCount === 0 ? "Pilih minimal satu kucing dengan checkbox" : undefined}
         >
           <Printer className="h-4 w-4 shrink-0" aria-hidden />
-          Cetak
+          Cetak{printSelectionCount > 0 ? ` (${printSelectionCount})` : ""}
         </Button>
       </div>
 
@@ -863,24 +893,31 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
               Berat badan
             </span>
           </h2>
+          {admin && (
+            <ImportWeightTxtDialog
+              cats={rows.map((r) => ({
+                id: r.cat.id,
+                name: r.cat.name,
+                cat_id: r.cat.cat_id,
+              }))}
+            />
+          )}
         </div>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[560px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {admin && (
-                  <th className="w-10 px-5 py-3 text-left">
-                    <label className="flex cursor-pointer items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={allIds.length > 0 && allIds.every((id) => selectedIdsBerat.has(id))}
-                        onChange={() => toggleAll("berat")}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <span className="sr-only">Pilih semua (berat badan)</span>
-                    </label>
-                  </th>
-                )}
+                <th className="w-10 px-5 py-3 text-left">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allIds.length > 0 && allIds.every((id) => selectedIdsBerat.has(id))}
+                      onChange={() => toggleAll("berat")}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <span className="sr-only">Pilih semua (berat badan)</span>
+                  </label>
+                </th>
                 <th className="px-5 py-3 text-left">Cat</th>
                 <th className="min-w-[5rem] px-5 py-3 text-center">Status</th>
                 <th className="px-5 py-3 text-right">Berat terbaru</th>
@@ -899,18 +936,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                 const { label: trendLabel, deltaKg } = getWeightTrend(row.suggestion.lastWeight ?? null, row.previousWeight);
                 return (
                   <tr key={row.cat.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
-                    {admin && (
-                      <td className="px-5 py-3 align-middle">
-                        <label className="flex cursor-pointer items-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedIdsBerat.has(row.cat.id)}
-                            onChange={() => toggleOne("berat", row.cat.id)}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                        </label>
-                      </td>
-                    )}
+                    <td className="px-5 py-3 align-middle">
+                      <label className="flex cursor-pointer items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIdsBerat.has(row.cat.id)}
+                          onChange={() => toggleOne("berat", row.cat.id)}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                      </label>
+                    </td>
                     <td className="px-5 py-3 align-middle">
                       <CatCell cat={row.cat} />
                     </td>
@@ -1020,19 +1055,17 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
           <table className="min-w-[780px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {admin && (
-                  <th className="w-10 px-5 py-3 text-left">
-                    <label className="flex cursor-pointer items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={allIds.length > 0 && allIds.every((id) => selectedIdsObatCacing.has(id))}
-                        onChange={() => toggleAll("obatCacing")}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <span className="sr-only">Pilih semua (obat cacing)</span>
-                    </label>
-                  </th>
-                )}
+                <th className="w-10 px-5 py-3 text-left">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allIds.length > 0 && allIds.every((id) => selectedIdsObatCacing.has(id))}
+                      onChange={() => toggleAll("obatCacing")}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <span className="sr-only">Pilih semua (obat cacing)</span>
+                  </label>
+                </th>
                 <th className="px-5 py-3 text-left">Cat</th>
                 <th className="min-w-[5rem] px-5 py-3 text-left">Status</th>
                 <th className="min-w-[6rem] px-5 py-3 text-left">Jenis obat cacing</th>
@@ -1044,18 +1077,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                 const { status, keterangan } = getPreventiveStatus(row.lastDewormLog?.next_due_date ?? null);
                 return (
                   <tr key={row.cat.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
-                    {admin && (
-                      <td className="px-5 py-3 align-middle">
-                        <label className="flex cursor-pointer items-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedIdsObatCacing.has(row.cat.id)}
-                            onChange={() => toggleOne("obatCacing", row.cat.id)}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                        </label>
-                      </td>
-                    )}
+                    <td className="px-5 py-3 align-middle">
+                      <label className="flex cursor-pointer items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIdsObatCacing.has(row.cat.id)}
+                          onChange={() => toggleOne("obatCacing", row.cat.id)}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                      </label>
+                    </td>
                     <td className="px-5 py-3 align-middle">
                       <CatCell cat={row.cat} />
                     </td>
@@ -1102,19 +1133,17 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
           <table className="min-w-[780px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {admin && (
-                  <th className="w-10 px-5 py-3 text-left">
-                    <label className="flex cursor-pointer items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={allIds.length > 0 && allIds.every((id) => selectedIdsObatKutu.has(id))}
-                        onChange={() => toggleAll("obatKutu")}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <span className="sr-only">Pilih semua (obat kutu)</span>
-                    </label>
-                  </th>
-                )}
+                <th className="w-10 px-5 py-3 text-left">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allIds.length > 0 && allIds.every((id) => selectedIdsObatKutu.has(id))}
+                      onChange={() => toggleAll("obatKutu")}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <span className="sr-only">Pilih semua (obat kutu)</span>
+                  </label>
+                </th>
                 <th className="px-5 py-3 text-left">Cat</th>
                 <th className="min-w-[5rem] px-5 py-3 text-left">Status</th>
                 <th className="min-w-[6rem] px-5 py-3 text-left">Jenis obat kutu</th>
@@ -1126,18 +1155,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                 const { status, keterangan } = getPreventiveStatus(row.lastFleaLog?.next_due_date ?? null);
                 return (
                   <tr key={row.cat.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
-                    {admin && (
-                      <td className="px-5 py-3 align-middle">
-                        <label className="flex cursor-pointer items-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedIdsObatKutu.has(row.cat.id)}
-                            onChange={() => toggleOne("obatKutu", row.cat.id)}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                        </label>
-                      </td>
-                    )}
+                    <td className="px-5 py-3 align-middle">
+                      <label className="flex cursor-pointer items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIdsObatKutu.has(row.cat.id)}
+                          onChange={() => toggleOne("obatKutu", row.cat.id)}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                      </label>
+                    </td>
                     <td className="px-5 py-3 align-middle">
                       <CatCell cat={row.cat} />
                     </td>
@@ -1184,19 +1211,17 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
           <table className="min-w-[780px] w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {admin && (
-                  <th className="w-10 px-5 py-3 text-left">
-                    <label className="flex cursor-pointer items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={allIds.length > 0 && allIds.every((id) => selectedIdsVaksin.has(id))}
-                        onChange={() => toggleAll("vaksin")}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <span className="sr-only">Pilih semua (vaksin)</span>
-                    </label>
-                  </th>
-                )}
+                <th className="w-10 px-5 py-3 text-left">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allIds.length > 0 && allIds.every((id) => selectedIdsVaksin.has(id))}
+                      onChange={() => toggleAll("vaksin")}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <span className="sr-only">Pilih semua (vaksin)</span>
+                  </label>
+                </th>
                 <th className="px-5 py-3 text-left">Cat</th>
                 <th className="min-w-[5rem] px-5 py-3 text-left">Status</th>
                 <th className="min-w-[7rem] px-2 py-3 text-left">Last</th>
@@ -1220,18 +1245,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                   : CAPSULE.neutral;
                 return (
                   <tr key={row.cat.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
-                    {admin && (
-                      <td className="px-5 py-3 align-middle">
-                        <label className="flex cursor-pointer items-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedIdsVaksin.has(row.cat.id)}
-                            onChange={() => toggleOne("vaksin", row.cat.id)}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                        </label>
-                      </td>
-                    )}
+                    <td className="px-5 py-3 align-middle">
+                      <label className="flex cursor-pointer items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIdsVaksin.has(row.cat.id)}
+                          onChange={() => toggleOne("vaksin", row.cat.id)}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                      </label>
+                    </td>
                     <td className="px-5 py-3 align-middle">
                       <CatCell cat={row.cat} />
                     </td>
@@ -1286,17 +1309,12 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
       )}
 
       {activeTab === "dirawat" && (() => {
-        const dirawatRows = rows.filter(
-          (row) =>
-            row.suggestion.reasons.some((r) => r.includes("Sedang dalam perawatan aktif")) ||
-            row.cat.status === "sakit" ||
-            row.cat.status === "memburuk",
-        );
+        const dirawatRows = filterDirawatRows(rows);
         const dirawatIds = dirawatRows.map((r) => r.cat.id);
         const allDirawatSelected =
           dirawatIds.length > 0 && dirawatIds.every((id) => selectedIdsDirawat.has(id));
         const statusLabel = (s: string | null) => (s ? CAT_STATUS_LABELS[s as keyof typeof CAT_STATUS_LABELS] ?? s : "");
-        const colSpan = admin ? 7 : 6;
+        const colSpan = 7;
         return (
           <section className="w-full min-w-0 space-y-3">
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1359,21 +1377,19 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
               <table className="min-w-[700px] w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {admin && (
-                      <th className="w-10 px-2 py-3 text-left">
-                        <label className="flex cursor-pointer items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={allDirawatSelected}
-                            onChange={() =>
-                              setSelectedIdsDirawat(allDirawatSelected ? new Set() : new Set(dirawatIds))
-                            }
-                            className="h-4 w-4 rounded border-input"
-                          />
-                          <span className="sr-only">Pilih semua (dirawat)</span>
-                        </label>
-                      </th>
-                    )}
+                    <th className="w-10 px-2 py-3 text-left">
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={allDirawatSelected}
+                          onChange={() =>
+                            setSelectedIdsDirawat(allDirawatSelected ? new Set() : new Set(dirawatIds))
+                          }
+                          className="h-4 w-4 rounded border-input"
+                        />
+                        <span className="sr-only">Pilih semua (dirawat)</span>
+                      </label>
+                    </th>
                     <th className="px-5 py-3 text-left">Cat</th>
                     <th className="min-w-[10rem] px-5 py-3 text-left">Status</th>
                     <th className="min-w-[6rem] px-5 py-3 text-left">Lokasi</th>
@@ -1435,18 +1451,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                         [manualNotes, systemReasons].filter(Boolean).join(" · ") || "—";
                       return (
                         <tr key={row.cat.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
-                          {admin && (
-                            <td className="px-2 py-3 align-middle">
-                              <label className="flex cursor-pointer items-center">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedIdsDirawat.has(row.cat.id)}
-                                  onChange={() => toggleOne("dirawat", row.cat.id)}
-                                  className="h-4 w-4 rounded border-input"
-                                />
-                              </label>
-                            </td>
-                          )}
+                          <td className="px-2 py-3 align-middle">
+                            <label className="flex cursor-pointer items-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedIdsDirawat.has(row.cat.id)}
+                                onChange={() => toggleOne("dirawat", row.cat.id)}
+                                className="h-4 w-4 rounded border-input"
+                              />
+                            </label>
+                          </td>
                           <td className="px-5 py-3 align-middle">
                             <CatCell cat={row.cat} />
                           </td>
@@ -1633,7 +1647,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, index) => {
+                {printRows.map((row, index) => {
                   const { label: trendLabel, deltaKg } = getWeightTrend(row.suggestion.lastWeight ?? null, row.previousWeight);
                   const lastW = row.suggestion.lastWeight;
                   const prevW = row.previousWeight;
@@ -1724,7 +1738,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => {
+                {printRows.map((row, i) => {
                   const { status, keterangan } = getPreventiveStatus(row.lastDewormLog?.next_due_date ?? null);
                   const log = row.lastDewormLog;
                   return (
@@ -1766,7 +1780,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => {
+                {printRows.map((row, i) => {
                   const { status } = getPreventiveStatus(row.lastFleaLog?.next_due_date ?? null);
                   const log = row.lastFleaLog;
                   return (
@@ -1807,7 +1821,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => {
+                {printRows.map((row, i) => {
                   const { status } = getPreventiveStatus(row.lastVaccineLog?.next_due_date ?? null);
                   const log = row.lastVaccineLog;
                   const { label: vaxLabel } = getVaccineTypeCapsule(log?.title);
@@ -1832,14 +1846,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
         </div>
       )}
 
-      {activeTab === "dirawat" && (() => {
-        const dirawatRows = rows.filter(
-          (row) =>
-            row.suggestion.reasons.some((r) => r.includes("Sedang dalam perawatan aktif")) ||
-            row.cat.status === "sakit" ||
-            row.cat.status === "memburuk",
-        );
-        return (
+      {activeTab === "dirawat" && (
           <div id="health-dirawat-print" className="hidden print:block health-preventive-print" aria-hidden>
             <div className="health-berat-print-inner">
               <h1 className="health-berat-print-title">Laporan Dirawat</h1>
@@ -1859,12 +1866,12 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
                   </tr>
                 </thead>
                 <tbody>
-                  {dirawatRows.length === 0 ? (
+                  {printRows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-4 text-muted-foreground">Tidak ada kucing yang sedang dalam perawatan.</td>
+                      <td colSpan={7} className="text-center py-4 text-muted-foreground">Tidak ada kucing yang dipilih.</td>
                     </tr>
                   ) : (
-                    dirawatRows.map((row, i) => {
+                    printRows.map((row, i) => {
                       const dirawatStatusList = Array.isArray(row.cat.dirawat_status) ? row.cat.dirawat_status : [];
                       const statusPrint = dirawatStatusList.length > 0
                         ? dirawatStatusList.map((key) => DIRAWAT_STATUS_LABELS[key as keyof typeof DIRAWAT_STATUS_LABELS] ?? key).join(", ")
@@ -1889,8 +1896,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
               </table>
             </div>
           </div>
-        );
-      })()}
+      )}
     </div>
   );
 }
