@@ -23,6 +23,7 @@ import {
   PHOTO_MAX_BYTES,
   PHOTO_ALLOWED_MIME_TYPES,
   isCatStatusActive,
+  type CatStatus,
 } from "@/lib/constants";
 import { appendActivityLog } from "@/app/actions/activity-log";
 
@@ -270,7 +271,9 @@ export async function bulkUpdateCats(formData: FormData) {
   const isContagiousRaw = getOptionalString(formData, "is_contagious");
   const hasDirawatStatus = formData.has("apply_dirawat_status");
 
-  if (status && !validateCatStatus(status)) {
+  const validatedStatus: CatStatus | undefined =
+    status && validateCatStatus(status) ? status : undefined;
+  if (status && !validatedStatus) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, STATUS_ERROR);
   }
   if (location && !validateCatLocation(location)) {
@@ -278,7 +281,7 @@ export async function bulkUpdateCats(formData: FormData) {
   }
   const hasNotes = treatmentNotesRaw != null && treatmentNotesRaw.trim() !== "";
   const hasContagious = isContagiousRaw === "true" || isContagiousRaw === "false";
-  if (!status && !location && !breedIdRaw && !hasNotes && !hasContagious && !hasDirawatStatus) {
+  if (!validatedStatus && !location && !breedIdRaw && !hasNotes && !hasContagious && !hasDirawatStatus) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Pilih status, lokasi, jenis, keterangan, menular, atau status dirawat yang akan diubah.");
   }
 
@@ -296,9 +299,9 @@ export async function bulkUpdateCats(formData: FormData) {
     dirawat_status?: string[];
     is_active?: boolean;
   } = {};
-  if (status) {
-    updates.status = status;
-    updates.is_active = isCatStatusActive(status);
+  if (validatedStatus) {
+    updates.status = validatedStatus;
+    updates.is_active = isCatStatusActive(validatedStatus);
   }
   if (location) updates.location = location;
   if (breedId) updates.breed_id = breedId;

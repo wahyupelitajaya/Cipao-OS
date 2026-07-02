@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { DUE_SOON_DAYS, NOTIFICATION_WINDOW_DAYS, DASHBOARD_SEARCH_KEYWORDS } from "@/lib/constants";
+import { DUE_SOON_DAYS, NOTIFICATION_WINDOW_DAYS, DASHBOARD_SEARCH_KEYWORDS, CAT_STATUS_LABELS } from "@/lib/constants";
 import type {
   DashboardData,
   DashboardCatRecord,
@@ -25,14 +25,7 @@ import type {
   CatLocation,
 } from "@/app/(app)/dashboard/types";
 
-const STATUS_LABEL: Record<NonNullable<CatStatus>, string> = {
-  sehat: "Sehat",
-  membaik: "Membaik",
-  memburuk: "Memburuk",
-  hampir_sembuh: "Hampir Sembuh",
-  observasi: "Observasi",
-  sakit: "Sakit",
-};
+const STATUS_LABEL = CAT_STATUS_LABELS;
 
 const LOCATION_LABEL: Record<NonNullable<CatLocation>, string> = {
   rumah: "rumah",
