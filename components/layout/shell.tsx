@@ -10,6 +10,7 @@ import { createSupabaseServerClient } from "@/lib/supabaseClient";
 import { getSearchData } from "@/lib/data/search";
 import type { SearchData } from "@/lib/data/search";
 import { PageViewLogger } from "@/components/layout/page-view-logger";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 export type { SearchData };
 
@@ -64,6 +65,9 @@ export async function AppShell({ children }: { children: ReactNode }) {
               {profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : "guest"}
             </p>
             <div className="mt-3">
+              <ThemeToggle className="w-full justify-start px-2" />
+            </div>
+            <div className="mt-2">
               <LogoutButton sidebar />
             </div>
           </div>
@@ -93,6 +97,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
             <div className="min-w-0 flex-1 lg:hidden">
               <GlobalCommand searchData={searchData} />
             </div>
+            <ThemeToggle compact />
             <LogoutButton compact />
           </div>
         </header>

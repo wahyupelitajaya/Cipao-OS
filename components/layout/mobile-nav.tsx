@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { LogoutButton } from "@/components/layout/logout-button";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const navItems: { href: string; label: string; adminOnly?: boolean }[] = [
@@ -90,6 +91,9 @@ export function MobileNav({ email, role }: MobileNavProps) {
                 {role ? role.charAt(0).toUpperCase() + role.slice(1) : "Guest"}
               </p>
               <div className="mt-3">
+                <ThemeToggle className="w-full justify-start px-2" />
+              </div>
+              <div className="mt-2">
                 <LogoutButton sidebar />
               </div>
             </div>

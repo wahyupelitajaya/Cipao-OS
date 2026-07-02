@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabaseBrowserClient";
 import { isSafeRedirectPath } from "@/lib/validation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 const supabase = createSupabaseBrowserClient();
 
@@ -155,7 +156,8 @@ export default function LoginPage() {
         </div>
       }
     >
-      <div className="flex min-h-screen items-center justify-center px-6">
+      <div className="relative flex min-h-screen items-center justify-center px-6">
+        <ThemeToggle compact className="absolute right-4 top-4 sm:right-6 sm:top-6" />
         <LoginForm />
       </div>
     </Suspense>
