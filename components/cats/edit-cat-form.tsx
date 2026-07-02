@@ -6,6 +6,7 @@ import type { Tables } from "@/lib/types";
 import { updateCatWithState } from "@/app/actions/cats";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { CAT_STATUSES, CAT_LOCATIONS, CAT_STATUS_LABELS, CAT_LOCATION_LABELS } from "@/lib/constants";
 
 type Cat = Tables<"cats">;
@@ -113,6 +114,18 @@ export function EditCatForm({ cat, breeds }: EditCatFormProps) {
             </option>
           ))}
         </select>
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-muted-foreground">
+          Deskripsi (opsional)
+        </label>
+        <Textarea
+          name="description"
+          rows={4}
+          maxLength={2000}
+          defaultValue={cat.description ?? ""}
+          placeholder="Karakter, catatan, atau latar belakang kucing."
+        />
       </div>
       <div className="space-y-1">
         <label className="text-xs font-medium text-muted-foreground">

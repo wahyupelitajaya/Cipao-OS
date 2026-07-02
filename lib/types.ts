@@ -32,6 +32,8 @@ export type Database = {
           breed_id: string | null;
           /** Catatan perawatan manual (jenis penyakit, yang merawat, dll). */
           treatment_notes: string | null;
+          /** Deskripsi profil kucing (karakter, catatan, latar belakang, dll). */
+          description: string | null;
           /** Apakah menular: true / false / null (belum ditentukan). */
           is_contagious: boolean | null;
           /** Status detail dirawat (multi-select): tidak_ada_perubahan, ada_perubahan, parah, dll. */

@@ -35,6 +35,21 @@ const STATUS_ERROR =
   CAT_STATUSES.map((s) => CAT_STATUS_LABELS[s]).join(", ") +
   ".";
 
+const CAT_DESCRIPTION_MAX_LENGTH = 2000;
+
+function parseCatDescription(raw: string | undefined | null): string | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > CAT_DESCRIPTION_MAX_LENGTH) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      `Deskripsi maksimal ${CAT_DESCRIPTION_MAX_LENGTH} karakter.`,
+    );
+  }
+  return trimmed;
+}
+
 export async function createCat(formData: FormData) {
   await requireAdmin();
 
@@ -213,6 +228,9 @@ export async function updateCat(formData: FormData) {
     const notes = getOptionalString(formData, "treatment_notes")?.trim() || null;
     updates.treatment_notes = notes;
   }
+  if (formData.has("description")) {
+    updates.description = parseCatDescription(getOptionalString(formData, "description"));
+  }
   if (formData.has("is_contagious")) {
     const v = getOptionalString(formData, "is_contagious");
     updates.is_contagious = v === "true" ? true : v === "false" ? false : null;
@@ -371,6 +389,50 @@ export async function updateCatWithState(
     return { status: "success" };
   } catch (error) {
     console.error("Failed to update cat", error);
+    return {
+      status: "error",
+      message: getFriendlyMessage(error),
+    };
+  }
+}
+
+export async function updateCatDescription(formData: FormData) {
+  await requireAdmin();
+
+  const id = getString(formData, "id", { required: true });
+  const description = parseCatDescription(getOptionalString(formData, "description"));
+
+  const supabase = await createSupabaseServerClient();
+  const { data: cat, error } = await supabase
+    .from("cats")
+    .update({ description })
+    .eq("id", id)
+    .select("id, name")
+    .maybeSingle();
+
+  if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+  if (!cat) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Kucing tidak ditemukan.");
+  }
+
+  revalidateCat(id);
+  appendActivityLog({
+    action: "update",
+    entity_type: "cat",
+    entity_id: id,
+    summary: `Memperbarui deskripsi kucing: ${cat.name}`,
+  }).catch(() => {});
+}
+
+export async function updateCatDescriptionWithState(
+  _prevState: UpdateCatState,
+  formData: FormData,
+): Promise<UpdateCatState> {
+  try {
+    await updateCatDescription(formData);
+    return { status: "success" };
+  } catch (error) {
+    console.error("Failed to update cat description", error);
     return {
       status: "error",
       message: getFriendlyMessage(error),

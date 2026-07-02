@@ -17,6 +17,7 @@ import {
 import { addHealthLog, addWeightLog, addGroomingLog } from "@/app/actions/logs";
 import { acceptSuggestedStatus } from "@/app/actions/cats";
 import { EditCatDialog } from "@/components/cats/edit-cat-dialog";
+import { CatDescriptionSection } from "@/components/cats/cat-description-section";
 import { DeleteCatButton } from "@/components/cats/delete-cat-button";
 import { HealthLogListItem } from "@/components/cats/health-log-list-item";
 import { Badge } from "@/components/ui/badge";
@@ -243,6 +244,12 @@ export default async function CatProfilePage(props: CatProfilePageProps) {
           )}
         </div>
       </header>
+
+      <CatDescriptionSection
+        catId={c.id}
+        description={c.description}
+        admin={admin}
+      />
 
       <section>
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

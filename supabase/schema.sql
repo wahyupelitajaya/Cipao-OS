@@ -90,6 +90,7 @@ create table if not exists public.cats (
   is_active boolean not null default true,
   photo_url text,
   treatment_notes text,
+  description text,
   is_contagious boolean,
   created_at timestamptz not null default now()
 );
