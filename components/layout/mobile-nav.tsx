@@ -16,7 +16,7 @@ const navItems: { href: string; label: string; adminOnly?: boolean }[] = [
   { href: "/health", label: "Health" },
   { href: "/grooming", label: "Grooming" },
   { href: "/inventory", label: "Inventory" },
-  { href: "/activity", label: "Activity" },
+  { href: "/activity", label: "Activity", adminOnly: true },
   { href: "/log", label: "Log", adminOnly: true },
 ];
 

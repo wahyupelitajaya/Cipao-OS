@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getSessionProfile, isAdmin } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
 import { getMonthActivitySummary, getDayActivities } from "@/app/actions/activity";
@@ -7,8 +8,11 @@ import { ActivityContent } from "@/components/activity/activity-content";
 export const dynamic = "force-dynamic";
 
 export default async function ActivityPage() {
-  const { profile } = await getSessionProfile();
-  const admin = isAdmin(profile);
+  const { session, profile } = await getSessionProfile();
+  if (!session) redirect("/login");
+  if (!isAdmin(profile)) redirect("/dashboard");
+
+  const admin = true;
   const today = todayISO();
   const now = new Date();
   const year = now.getFullYear();
@@ -33,7 +37,7 @@ export default async function ActivityPage() {
           Activity
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Catatan perawatan harian — kunjungan dan aktivitas per hari.
+          Catatan perawatan harian — kunjungan dan aktivitas per hari. Hanya admin yang dapat mengakses.
         </p>
       </header>
 

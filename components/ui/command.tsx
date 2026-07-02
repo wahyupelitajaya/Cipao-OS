@@ -10,9 +10,20 @@ import type { SearchData } from "@/components/layout/shell";
 type GlobalCommandProps = {
   searchData?: SearchData | null;
   sidebar?: boolean;
+  admin?: boolean;
 };
 
-export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
+const NAV_ITEMS: { href: string; label: string; adminOnly?: boolean }[] = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/cats", label: "Cats" },
+  { href: "/health", label: "Health" },
+  { href: "/grooming", label: "Grooming" },
+  { href: "/inventory", label: "Inventory" },
+  { href: "/activity", label: "Activity", adminOnly: true },
+  { href: "/log", label: "Log", adminOnly: true },
+];
+
+export function GlobalCommand({ searchData, sidebar, admin = false }: GlobalCommandProps) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname() ?? "/cats";
 
@@ -29,6 +40,7 @@ export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
 
   const cats = searchData?.cats ?? [];
   const inventoryItems = searchData?.inventoryItems ?? [];
+  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || admin);
 
   return (
     <>
@@ -75,14 +87,7 @@ export function GlobalCommand({ searchData, sidebar }: GlobalCommandProps) {
                 heading="Navigasi"
                 className="px-1 py-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground"
               >
-                {[
-                  { href: "/dashboard", label: "Dashboard" },
-                  { href: "/cats", label: "Cats" },
-                  { href: "/health", label: "Health" },
-                  { href: "/grooming", label: "Grooming" },
-                  { href: "/inventory", label: "Inventory" },
-                  { href: "/activity", label: "Activity" },
-                ].map(({ href, label }) => (
+                {navItems.map(({ href, label }) => (
                   <CommandItemLink
                     key={href}
                     href={href}

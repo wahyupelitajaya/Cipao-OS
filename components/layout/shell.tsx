@@ -91,11 +91,11 @@ export async function AppShell({ children }: { children: ReactNode }) {
             <span className="truncate text-sm font-semibold text-foreground">Cipao OS</span>
           </Link>
           <div className="hidden min-w-0 flex-1 max-w-md lg:block">
-            <GlobalCommand searchData={searchData} />
+            <GlobalCommand searchData={searchData} admin={isAdmin(profile)} />
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-1 lg:justify-end">
             <div className="min-w-0 flex-1 lg:hidden">
-              <GlobalCommand searchData={searchData} />
+              <GlobalCommand searchData={searchData} admin={isAdmin(profile)} />
             </div>
             <ThemeToggle compact />
             <LogoutButton compact />

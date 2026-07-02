@@ -1,7 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabaseClient";
-import { requireUser, requireAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { revalidateActivity } from "@/lib/revalidate";
 import { requireDate, getOptionalString, getJsonStringArray } from "@/lib/validation";
@@ -75,7 +75,7 @@ export async function getMonthActivitySummary(
   year: number,
   month: number,
 ): Promise<MonthDaySummary[]> {
-  await requireUser();
+  await requireAdmin();
 
   if (
     !Number.isInteger(year) ||
@@ -132,7 +132,7 @@ export async function getMonthActivitySummary(
 export async function getDayActivities(
   date: string,
 ): Promise<{ activities: DayActivityItem[]; visit: VisitDayState | null }> {
-  await requireUser();
+  await requireAdmin();
 
   if (typeof date !== "string" || !isValidDateString(date)) {
     throw new Error("Format tanggal tidak valid.");
@@ -205,7 +205,7 @@ export async function getMonthActivities(
   year: number,
   month: number,
 ): Promise<DayActivityItem[]> {
-  await requireUser();
+  await requireAdmin();
 
   if (
     !Number.isInteger(year) ||
