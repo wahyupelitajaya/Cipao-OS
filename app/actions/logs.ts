@@ -309,6 +309,298 @@ export async function bulkImportWeightFromTxt(formData: FormData): Promise<BulkI
   return result;
 }
 
+export interface BulkImportCatNameEntry {
+  name: string;
+  title?: string;
+  line?: number;
+}
+
+export interface BulkImportCatNamesResult {
+  applied: number;
+  notFound: { line?: number; name: string }[];
+  ambiguous: { line?: number; name: string; matches: string[] }[];
+  invalid: { line?: number; name: string; reason: string }[];
+  appliedCats: { name: string; title?: string }[];
+}
+
+function isBulkImportCatNamePayload(v: unknown): v is BulkImportCatNameEntry[] {
+  if (!Array.isArray(v) || v.length === 0) return false;
+  if (v.length > BULK_MAX_IDS) return false;
+  return v.every(
+    (item) =>
+      item != null &&
+      typeof item === "object" &&
+      typeof (item as BulkImportCatNameEntry).name === "string" &&
+      ((item as BulkImportCatNameEntry).title === undefined ||
+        typeof (item as BulkImportCatNameEntry).title === "string"),
+  );
+}
+
+async function upsertPreventiveLogForCat(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  catId: string,
+  type: PreventiveType,
+  date: string,
+  title: string,
+) {
+  const dateNorm = date.trim().slice(0, 10);
+
+  const { data: byDate, error: errByDate } = await supabase
+    .from("health_logs")
+    .select("id")
+    .eq("cat_id", catId)
+    .eq("type", type)
+    .eq("date", date)
+    .limit(1)
+    .maybeSingle();
+
+  let existingId: string | null = null;
+  if (!errByDate && byDate?.id) {
+    existingId = byDate.id;
+  } else {
+    const { data: rows, error: fetchErr } = await supabase
+      .from("health_logs")
+      .select("id, date")
+      .eq("cat_id", catId)
+      .eq("type", type)
+      .order("created_at", { ascending: false });
+    if (!fetchErr && Array.isArray(rows)) {
+      const found = rows.find((r) => r?.date && String(r.date).trim().slice(0, 10) === dateNorm);
+      if (found?.id) existingId = found.id;
+    }
+  }
+
+  if (existingId) {
+    const { error: updateErr } = await supabase
+      .from("health_logs")
+      .update({ date, title })
+      .eq("id", existingId)
+      .eq("cat_id", catId);
+    if (updateErr) throw new AppError(ErrorCode.DB_ERROR, updateErr.message, updateErr);
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("health_logs").insert({
+    cat_id: catId,
+    type,
+    date,
+    title,
+    next_due_date: null,
+    is_active_treatment: false,
+  });
+  if (insertError) throw new AppError(ErrorCode.DB_ERROR, insertError.message, insertError);
+}
+
+/** Impor log preventive (obat cacing / obat kutu / vaksin) dari daftar nama kucing. */
+export async function bulkImportPreventiveFromTxt(
+  formData: FormData,
+): Promise<BulkImportCatNamesResult> {
+  await requireAdmin();
+
+  const type = getString(formData, "type", { required: true });
+  const date = requireDate(formData, "date", "Tanggal");
+  const defaultTitle = getOptionalString(formData, "title")?.trim() || null;
+  const entries = getJson<unknown>(formData, "entries");
+
+  if (!validatePreventiveType(type)) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Tipe harus VACCINE, FLEA, atau DEWORM.");
+  }
+  if (!isBulkImportCatNamePayload(entries)) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "Format entri tidak valid. Diperlukan array nama kucing.",
+    );
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: cats, error: catsError } = await supabase
+    .from("cats")
+    .select("id, name, cat_id")
+    .eq("is_active", true);
+
+  if (catsError) throw new AppError(ErrorCode.DB_ERROR, catsError.message, catsError);
+
+  const catList = (cats ?? []) as CatMatchCandidate[];
+  const preventiveType = type as PreventiveType;
+  const fallbackTitle = PREVENTIVE_TITLES[preventiveType];
+
+  const result: BulkImportCatNamesResult = {
+    applied: 0,
+    notFound: [],
+    ambiguous: [],
+    invalid: [],
+    appliedCats: [],
+  };
+
+  const toApply = new Map<string, { name: string; title: string }>();
+
+  for (const entry of entries) {
+    const name = entry.name.trim();
+    const line = entry.line;
+
+    if (!name) {
+      result.invalid.push({ line, name, reason: "Nama kucing kosong." });
+      continue;
+    }
+
+    const match = matchCatByToken(catList, name);
+    if (match.status === "not_found") {
+      result.notFound.push({ line, name });
+      continue;
+    }
+    if (match.status === "ambiguous") {
+      result.ambiguous.push({
+        line,
+        name,
+        matches: match.matches.map((c) => c.name),
+      });
+      continue;
+    }
+
+    const title = entry.title?.trim() || defaultTitle || fallbackTitle;
+    toApply.set(match.cat.id, { name: match.cat.name, title });
+  }
+
+  if (toApply.size === 0) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "Tidak ada kucing yang bisa diterapkan. Periksa nama kucing di file.",
+    );
+  }
+
+  for (const [catId, { name, title }] of toApply) {
+    await upsertPreventiveLogForCat(supabase, catId, preventiveType, date, title);
+    result.applied += 1;
+    result.appliedCats.push({ name, title });
+  }
+
+  revalidateHealth();
+  for (const catId of toApply.keys()) {
+    revalidateCat(catId);
+  }
+
+  const typeLabel =
+    preventiveType === "DEWORM" ? "obat cacing" : preventiveType === "FLEA" ? "obat kutu" : "vaksin";
+  appendActivityLog({
+    action: "create",
+    entity_type: "health_log",
+    summary: `Impor ${typeLabel} dari file .txt: ${result.applied} kucing (${date})`,
+  }).catch(() => {});
+
+  return result;
+}
+
+/** Impor log grooming dari daftar nama kucing. */
+export async function bulkImportGroomingFromTxt(
+  formData: FormData,
+): Promise<BulkImportCatNamesResult> {
+  await requireAdminOrGroomer();
+
+  const date = requireDate(formData, "date", "Tanggal");
+  const entries = getJson<unknown>(formData, "entries");
+
+  if (!isBulkImportCatNamePayload(entries)) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "Format entri tidak valid. Diperlukan array nama kucing.",
+    );
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: cats, error: catsError } = await supabase
+    .from("cats")
+    .select("id, name, cat_id")
+    .eq("is_active", true);
+
+  if (catsError) throw new AppError(ErrorCode.DB_ERROR, catsError.message, catsError);
+
+  const catList = (cats ?? []) as CatMatchCandidate[];
+  const dateNorm = date.trim().slice(0, 10);
+
+  const result: BulkImportCatNamesResult = {
+    applied: 0,
+    notFound: [],
+    ambiguous: [],
+    invalid: [],
+    appliedCats: [],
+  };
+
+  const toApply = new Map<string, { name: string }>();
+
+  for (const entry of entries) {
+    const name = entry.name.trim();
+    const line = entry.line;
+
+    if (!name) {
+      result.invalid.push({ line, name, reason: "Nama kucing kosong." });
+      continue;
+    }
+
+    const match = matchCatByToken(catList, name);
+    if (match.status === "not_found") {
+      result.notFound.push({ line, name });
+      continue;
+    }
+    if (match.status === "ambiguous") {
+      result.ambiguous.push({
+        line,
+        name,
+        matches: match.matches.map((c) => c.name),
+      });
+      continue;
+    }
+
+    toApply.set(match.cat.id, { name: match.cat.name });
+  }
+
+  if (toApply.size === 0) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "Tidak ada kucing yang bisa diterapkan. Periksa nama kucing di file.",
+    );
+  }
+
+  for (const [catId, { name }] of toApply) {
+    const { data: existing } = await supabase
+      .from("grooming_logs")
+      .select("id, date")
+      .eq("cat_id", catId)
+      .order("date", { ascending: false });
+
+    const existingId =
+      (existing ?? []).find((r) => r?.date && String(r.date).trim().slice(0, 10) === dateNorm)?.id ??
+      null;
+
+    if (existingId) {
+      const { error } = await supabase
+        .from("grooming_logs")
+        .update({ date })
+        .eq("id", existingId)
+        .eq("cat_id", catId);
+      if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+    } else {
+      const { error } = await supabase.from("grooming_logs").insert({ cat_id: catId, date });
+      if (error) throw new AppError(ErrorCode.DB_ERROR, error.message, error);
+    }
+
+    result.applied += 1;
+    result.appliedCats.push({ name });
+  }
+
+  revalidateGrooming();
+  for (const catId of toApply.keys()) {
+    revalidateCat(catId);
+  }
+
+  appendActivityLog({
+    action: "create",
+    entity_type: "grooming_log",
+    summary: `Impor grooming dari file .txt: ${result.applied} kucing (${date})`,
+  }).catch(() => {});
+
+  return result;
+}
+
 export async function updateWeightLog(formData: FormData) {
   await requireAdmin();
 

@@ -21,6 +21,7 @@ import {
 import { EditCatDirawatDialog } from "@/components/cats/edit-cat-dirawat-dialog";
 import { BulkEditDirawatDialog } from "@/components/cats/bulk-edit-dirawat-dialog";
 import { ImportWeightTxtDialog } from "@/components/health/import-weight-txt-dialog";
+import { ImportCatNamesTxtDialog } from "@/components/health/import-cat-names-txt-dialog";
 import { Printer } from "lucide-react";
 import { parseLocalDateString } from "@/lib/dates";
 import { CAT_STATUS_LABELS, DIRAWAT_STATUS_LABELS } from "@/lib/constants";
@@ -362,6 +363,11 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
   }, [savedFeedback]);
 
   const allIds = rows.map((r) => r.cat.id);
+  const catMatchCandidates = rows.map((r) => ({
+    id: r.cat.id,
+    name: r.cat.name,
+    cat_id: r.cat.cat_id,
+  }));
 
   function getSelectedForSection(section: SectionKey): Set<string> {
     switch (section) {
@@ -894,13 +900,7 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
             </span>
           </h2>
           {admin && (
-            <ImportWeightTxtDialog
-              cats={rows.map((r) => ({
-                id: r.cat.id,
-                name: r.cat.name,
-                cat_id: r.cat.cat_id,
-              }))}
-            />
+            <ImportWeightTxtDialog cats={catMatchCandidates} />
           )}
         </div>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
@@ -1046,11 +1046,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
 
       {activeTab === "obatCacing" && (
       <section className="w-full min-w-0">
-        <h2 className="mb-3">
-          <span className="inline-flex rounded-full border border-emerald-200/80 bg-emerald-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-emerald-800 shadow-sm">
-            Obat cacing
-          </span>
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h2 className="m-0">
+            <span className="inline-flex rounded-full border border-emerald-200/80 bg-emerald-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-emerald-800 shadow-sm">
+              Obat cacing
+            </span>
+          </h2>
+          {admin && (
+            <ImportCatNamesTxtDialog cats={catMatchCandidates} kind="deworm" />
+          )}
+        </div>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
             <thead>
@@ -1124,11 +1129,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
 
       {activeTab === "obatKutu" && (
       <section className="w-full min-w-0">
-        <h2 className="mb-3">
-          <span className="inline-flex rounded-full border border-sky-200/80 bg-sky-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-sky-800 shadow-sm">
-            Obat kutu
-          </span>
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h2 className="m-0">
+            <span className="inline-flex rounded-full border border-sky-200/80 bg-sky-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-sky-800 shadow-sm">
+              Obat kutu
+            </span>
+          </h2>
+          {admin && (
+            <ImportCatNamesTxtDialog cats={catMatchCandidates} kind="flea" />
+          )}
+        </div>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
             <thead>
@@ -1202,11 +1212,16 @@ export function HealthTable({ rows, breeds, admin, initialTab = "berat", sortBy 
 
       {activeTab === "vaksin" && (
       <section className="w-full min-w-0">
-        <h2 className="mb-3">
-          <span className="inline-flex rounded-full border border-violet-200/80 bg-violet-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-violet-800 shadow-sm">
-            Vaksin
-          </span>
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h2 className="m-0">
+            <span className="inline-flex rounded-full border border-violet-200/80 bg-violet-50/90 px-4 py-1.5 text-sm font-semibold uppercase tracking-wider text-violet-800 shadow-sm">
+              Vaksin
+            </span>
+          </h2>
+          {admin && (
+            <ImportCatNamesTxtDialog cats={catMatchCandidates} kind="vaccine" />
+          )}
+        </div>
         <div className="w-full max-w-full overflow-auto max-h-[75vh]" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="min-w-[780px] w-full text-sm">
             <thead>

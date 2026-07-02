@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { EditGroomingDialog } from "@/components/grooming/edit-grooming-dialog";
 import { AddGroomingDialog } from "@/components/grooming/add-grooming-dialog";
 import { bulkSetGroomingDate, bulkDeleteGroomingLogs } from "@/app/actions/logs";
+import { ImportCatNamesTxtDialog } from "@/components/health/import-cat-names-txt-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Tables } from "@/lib/types";
 
@@ -167,6 +168,16 @@ export function GroomingTable({ rows, breeds, canEdit, sortBy = "date", order = 
           <Printer className="h-4 w-4 shrink-0" aria-hidden />
           Cetak
         </Button>
+        {canEdit && (
+          <ImportCatNamesTxtDialog
+            cats={rows.map((r) => ({
+              id: r.cat.id,
+              name: r.cat.name,
+              cat_id: r.cat.cat_id,
+            }))}
+            kind="grooming"
+          />
+        )}
       </div>
       {canEdit && selectedCount > 0 && (
         <div className="space-y-3">
