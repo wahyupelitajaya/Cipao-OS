@@ -9,7 +9,7 @@
 --   GROOMER_USER_ID_PLACEHOLDER → ivan@groomer.sb (groomer)
 
 insert into public.profiles (id, email, role) values
-  ('8894f890-be44-4108-adc6-68d3259df35f', 'wahyu@admin.sb', 'admin')
+  ('254b9f5b-fc45-47bd-afe0-8c43070ae98b', 'wahyupelitajaya12@gmail.com', 'admin')
 on conflict (id) do update set role = excluded.role, email = excluded.email;
 
 insert into public.profiles (id, email, role) values

@@ -10,7 +10,7 @@
 
 delete from public.profiles
 where email in (
-  'wahyu@admin.sb',
+  'wahyupelitajaya12@gmail.com',
   'cc@owner.sb',
   'ivan@groomer.sb'
 );
